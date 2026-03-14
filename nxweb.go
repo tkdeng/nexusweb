@@ -149,6 +149,10 @@ func New(root string, config ...Config) (*App, error) {
 }
 
 func (app *App) Listen() error {
+	//todo: may allow listen method to optionally override port
+	// make sure config can be updated with it
+	// also make sure static config vars are modified (or just make port dynamic)
+
 	portHTTP := ":" + strconv.FormatUint(uint64(app.Config.Port), 10)
 
 	if app.Config.PortSSL == 0 {

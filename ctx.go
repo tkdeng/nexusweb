@@ -108,6 +108,14 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	}
 
 	varList := map[string]string{}
+
+	for k, v := range ctx.router.app.Config.Vars {
+		varList[k] = goutil.Clean(v)
+	}
+
+	//todo: set other dynamic vars
+	// may also allow routers to store separate additional vars (on creation only)
+
 	for _, m := range vars {
 		// maps.Copy(varList, m)
 		for k, v := range m {

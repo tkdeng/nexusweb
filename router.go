@@ -43,8 +43,10 @@ func (router *Router) newRouter(path string) *Router {
 	return childRouter
 }
 
-func (router *Router) Use(path string, cb func(c *Ctx)) *Router {
+func (router *Router) Use(path string, cb func(c *Ctx) error) *Router {
 	paths := strings.Split(path, ":")
+
+	//todo: get dynamic :var1, :var2? values from paths
 
 	childRouter := router.newRouter(paths[0])
 
