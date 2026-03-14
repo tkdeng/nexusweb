@@ -75,5 +75,11 @@ func Compile(path string, vars map[string]string) error {
 	// #layout pages should be copied over
 	// also, embed const vars when possible, otherwise keep placeholder for future vars
 
+	//todo: add separate method for precompiled vars (and runtime var methods)
+	// similar to what webx module does with {lorem}
+	// may make it easier for admins to expand on these
+	// may also add future extensions using {:plugin key=value} method
+	// and use {:plugin key=value { content }} for simplicity of multiline content
+
 	return nil
 }
