@@ -1,0 +1,161 @@
+package nxweb
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/tkdeng/goutil"
+	"github.com/tkdeng/nexusweb/compiler"
+	"github.com/tkdeng/regex"
+)
+
+type Ctx struct {
+	router *Router
+	w      http.ResponseWriter
+	r      *http.Request
+
+	Host string
+	Port string
+	Path string
+	IP   string
+}
+
+func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, error) {
+	host, port, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	// get ip address or remote host
+	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteIP = r.RemoteAddr
+	}
+
+	if remoteIP == "" {
+		return nil, fmt.Errorf("unable to detect remote ip address")
+	}
+
+	return &Ctx{
+		router: router,
+		w:      w,
+		r:      r,
+
+		Host: goutil.Clean(host),
+		Port: goutil.Clean(port),
+		Path: "/" + strings.Trim(goutil.Clean(r.URL.Path), "/"),
+		IP:   goutil.Clean(remoteIP),
+	}, nil
+}
+
+func (ctx *Ctx) getLayout(path string) ([]byte, error) {
+	if !regex.Comp(`\/@([\w_\-\.]+)$`).Match([]byte(path)) {
+		return nil, fmt.Errorf("layout not found")
+	}
+
+	lPath := string(regex.Comp(`\/@([\w_\-\.]+)$`).RepLit([]byte(path), []byte("/#layout.html")))
+
+	lFilePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath)
+	if err != nil {
+		return nil, err
+	}
+
+	lbuf, err := os.ReadFile(lFilePath)
+	for err != nil && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).Match([]byte(lPath)) {
+		lPath = string(regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).Rep([]byte(lPath), []byte("$1")))
+
+		if lFilePath, err = goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath); err != nil {
+			return nil, err
+		}
+
+		lbuf, err = os.ReadFile(lFilePath)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return lbuf, nil
+}
+
+func (ctx *Ctx) Render(path string, vars ...Map) error {
+	if path == "/" || path == "" {
+		path = "index"
+	} else if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	filePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", path)
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasSuffix(filePath, ".html") {
+		filePath += ".html"
+	}
+
+	buf, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
+		buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
+	}
+
+	varList := map[string]string{}
+	for _, m := range vars {
+		for k, v := range m {
+			varList[k] = goutil.Clean(v)
+		}
+	}
+
+	if err = compiler.Render(&buf, filePath, varList); err != nil {
+		return err
+	}
+
+	ctx.w.WriteHeader(http.StatusOK)
+	ctx.w.Write(buf)
+	return nil
+}
+
+func (ctx *Ctx) Error(path string, status int, msg string) error {
+	path = strings.TrimRight(path, "/")
+
+	err := ctx.Render(path+"/@"+strconv.Itoa(status), Map{
+		"status": strconv.Itoa(status),
+		"msg":    msg,
+	})
+
+	if err != nil {
+		err = ctx.Render(path+"/@error", Map{
+			"status": strconv.Itoa(status),
+			"msg":    msg,
+		})
+	}
+
+	if err != nil {
+		err = ctx.Render("@"+strconv.Itoa(status), Map{
+			"status": strconv.Itoa(status),
+			"msg":    msg,
+		})
+	}
+
+	if err != nil {
+		err = ctx.Render("/@error", Map{
+			"status": strconv.Itoa(status),
+			"msg":    msg,
+		})
+	}
+
+	if err != nil {
+		ctx.w.WriteHeader(status)
+		ctx.w.Write([]byte(msg))
+	}
+
+	return nil
+}
