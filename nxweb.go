@@ -72,19 +72,23 @@ func New(root string, config ...Config) (*App, error) {
 		portVar = strconv.FormatUint(uint64(config[0].PortSSL), 10)
 	}
 
-	//todo: add const vars
 	compVars := map[string]string{
-		"root":     root,
-		"title":    config[0].Title,
-		"apptitle": config[0].AppTitle,
-		"desc":     config[0].Desc,
+		"root":     goutil.Clean(root),
+		"title":    goutil.Clean(config[0].Title),
+		"apptitle": goutil.Clean(config[0].AppTitle),
+		"desc":     goutil.Clean(config[0].Desc),
 
-		"public-uri": config[0].PublicURI,
+		"public-uri": goutil.Clean(config[0].PublicURI),
 		"debug-mode": goutil.ToType[string](config[0].DebugMode),
 
 		"port":      portVar,
 		"port-http": strconv.FormatUint(uint64(config[0].Port), 10),
 		"port-ssl":  strconv.FormatUint(uint64(config[0].PortSSL), 10),
+	}
+
+	// maps.Copy(compVars, config[0].Vars)
+	for k, v := range config[0].Vars {
+		compVars[k] = goutil.Clean(v)
 	}
 
 	err := compiler.Compile(config[0].Root, compVars)

@@ -109,6 +109,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 
 	varList := map[string]string{}
 	for _, m := range vars {
+		// maps.Copy(varList, m)
 		for k, v := range m {
 			varList[k] = goutil.Clean(v)
 		}
