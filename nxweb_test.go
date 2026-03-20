@@ -1,6 +1,8 @@
 package nxweb
 
-import "testing"
+import (
+	"testing"
+)
 
 func Test(t *testing.T) {
 	app, err := New("./test", Config{
@@ -11,6 +13,6 @@ func Test(t *testing.T) {
 		t.Error(err)
 	}
 
-	// app.Listen()
+	app.Listen()
 	_ = app
 }

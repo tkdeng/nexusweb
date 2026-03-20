@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tkdeng/goutil"
+	"github.com/tkdeng/nexusweb/plugins"
 	"github.com/tkdeng/regex"
 )
 
@@ -90,6 +91,29 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 				return bytes.TrimPrefix(b(3), []byte{'|'})
 			}
 			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
+		}
+
+		return []byte{}
+	})
+
+	*buf = regex.Comp(`(?s){:([\w_\-]+)((?:\s+[\w_\-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[\w_\-]+)|))+|)\s*(?:\{(.*?)\}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
+		if plugin, ok := plugins.Get(string(b(1))); ok {
+			args := map[string]string{}
+			regex.Comp(`([\w_\-]+)(?:\s*=\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
+				args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(2)))
+				return []byte{}
+			})
+
+			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), false)
+
+			if err != nil {
+				PrintMsg("warn", "Warning: Plugin Error!")
+				fmt.Println("  plugin:", string(b(1)))
+				fmt.Println(err)
+				return []byte{}
+			}
+
+			return out
 		}
 
 		return []byte{}
@@ -195,20 +219,6 @@ func Compile(root string, vars map[string]string) error {
 		}
 	}
 
-	/* dirPath, err := goutil.JoinPath(root, "pages")
-	if err != nil {
-		return err
-	}
-
-	fileList, err := os.ReadDir(dirPath)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range fileList {
-		fmt.Println(file.Name())
-	} */
-
 	//todo: pre compile pages to dist
 	// @pages should remain dynamic
 	// #layout pages should be copied over
@@ -225,6 +235,8 @@ func Compile(root string, vars map[string]string) error {
 
 func compPages(root string, path string) error {
 	//todo: compile sub pages and directories
+
+	fmt.Println(root, path)
 
 	return nil
 }
@@ -293,6 +305,29 @@ func compVars(buf *[]byte, vars map[string]string) {
 				return bytes.TrimPrefix(b(3), []byte{'|'})
 			}
 			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
+		}
+
+		return b(0)
+	})
+
+	*buf = regex.Comp(`(?s){:([\w_\-]+)((?:\s+[\w_\-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[\w_\-]+)|))+|)\s*(?:\{(.*?)\}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
+		if plugin, ok := plugins.Get(string(b(1)), true); ok {
+			args := map[string]string{}
+			regex.Comp(`([\w_\-]+)(?:\s*=\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
+				args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(2)))
+				return []byte{}
+			})
+
+			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), true)
+
+			if err != nil {
+				PrintMsg("warn", "Warning: Plugin Error!")
+				fmt.Println("  plugin:", string(b(1)))
+				fmt.Println(err)
+				return b(0)
+			}
+
+			return out
 		}
 
 		return b(0)
