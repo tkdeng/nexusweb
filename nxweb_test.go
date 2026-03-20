@@ -12,4 +12,5 @@ func Test(t *testing.T) {
 	}
 
 	app.Listen()
+	_ = app
 }

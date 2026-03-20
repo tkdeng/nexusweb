@@ -85,7 +85,7 @@ func New(root string, config ...Config) (*App, error) {
 		compVars[k] = goutil.Clean(v)
 	}
 
-	err = compiler.Compile(config[0].Root, compVars)
+	err = compiler.Compile(root, compVars)
 	if err != nil {
 		return &App{}, err
 	}
