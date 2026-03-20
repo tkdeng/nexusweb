@@ -107,7 +107,14 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
 	}
 
-	varList := map[string]string{}
+	varList := map[string]string{
+		"title":    goutil.Clean(ctx.router.app.Config.Title),
+		"apptitle": goutil.Clean(ctx.router.app.Config.AppTitle),
+		"desc":     goutil.Clean(ctx.router.app.Config.Desc),
+		"icon":     goutil.Clean(ctx.router.app.Config.Icon),
+		"public":   goutil.Clean(ctx.router.app.Config.PublicURI),
+		"debug":    goutil.ToType[string](ctx.router.app.Config.DebugMode),
+	}
 
 	for k, v := range ctx.router.app.Config.Vars {
 		varList[k] = goutil.Clean(v)
@@ -123,7 +130,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		}
 	}
 
-	if err = compiler.Render(&buf, filePath, varList); err != nil {
+	if err = compiler.Render(&buf, ctx.router.app.Config.Root, filePath, varList); err != nil {
 		return err
 	}
 

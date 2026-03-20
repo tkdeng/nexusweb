@@ -2,10 +2,10 @@ package nxweb
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +45,12 @@ type Config struct {
 type Map map[string]string
 
 func New(root string, config ...Config) (*App, error) {
+	var err error
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return &App{}, err
+	}
+
 	os.MkdirAll(root, 0755)
 
 	if len(config) == 0 {
@@ -65,25 +71,13 @@ func New(root string, config ...Config) (*App, error) {
 		config[0].Port = 8080
 	}
 
-	var portVar string
-	if config[0].PortSSL == 0 {
-		portVar = strconv.FormatUint(uint64(config[0].Port), 10)
-	} else {
-		portVar = strconv.FormatUint(uint64(config[0].PortSSL), 10)
-	}
-
 	compVars := map[string]string{
-		"root":     goutil.Clean(root),
 		"title":    goutil.Clean(config[0].Title),
 		"apptitle": goutil.Clean(config[0].AppTitle),
 		"desc":     goutil.Clean(config[0].Desc),
-
-		"public-uri": goutil.Clean(config[0].PublicURI),
-		"debug-mode": goutil.ToType[string](config[0].DebugMode),
-
-		"port":      portVar,
-		"port-http": strconv.FormatUint(uint64(config[0].Port), 10),
-		"port-ssl":  strconv.FormatUint(uint64(config[0].PortSSL), 10),
+		"icon":     goutil.Clean(config[0].Icon),
+		"public":   goutil.Clean(config[0].PublicURI),
+		"debug":    goutil.ToType[string](config[0].DebugMode),
 	}
 
 	// maps.Copy(compVars, config[0].Vars)
@@ -91,7 +85,7 @@ func New(root string, config ...Config) (*App, error) {
 		compVars[k] = goutil.Clean(v)
 	}
 
-	err := compiler.Compile(config[0].Root, compVars)
+	err = compiler.Compile(config[0].Root, compVars)
 	if err != nil {
 		return &App{}, err
 	}
@@ -102,9 +96,6 @@ func New(root string, config ...Config) (*App, error) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`pong!`))
 	})
-
-	//todo: trigger compile and catch 404
-	// add a custom app.Use() method to add custom routes
 
 	app := &App{
 		mux:    mux,
@@ -130,8 +121,8 @@ func New(root string, config ...Config) (*App, error) {
 			return
 		}
 
-		fmt.Println("-----")
-		fmt.Println(ctx.Path)
+		// fmt.Println("-----")
+		// fmt.Println(ctx.Path)
 
 		//todo: add static assets handler
 

@@ -2,12 +2,14 @@ package compiler
 
 import (
 	"bytes"
+	"os"
+	"strings"
 
 	"github.com/tkdeng/goutil"
 	"github.com/tkdeng/regex"
 )
 
-func Render(buf *[]byte, path string, vars map[string]string) error {
+func Render(buf *[]byte, root string, path string, vars map[string]string) error {
 	*buf = regex.Comp(`(?s){([?!])([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
 		_, ok := vars[string(b(2))]
 
@@ -19,11 +21,28 @@ func Render(buf *[]byte, path string, vars map[string]string) error {
 	})
 
 	*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		// fmt.Println(string(b(1)))
+		ePath, err := goutil.JoinPath(string(regex.Comp(`\/[^\/]+$`).Rep([]byte(path), []byte{})), string(b(1)))
+		if err != nil || !strings.HasPrefix(ePath, root+"/dist") {
+			return []byte{}
+		}
 
-		//todo: get file and embed (relative to path)
+		if !strings.HasSuffix(ePath, ".html") {
+			ePath += ".html"
+		}
 
-		return []byte{}
+		eBuf, err := os.ReadFile(ePath)
+
+		for err != nil {
+			ePath = string(regex.Comp(`\/[^\/]+\/([^\/]+)$`).Rep([]byte(ePath), []byte("/$1")))
+
+			if !strings.HasPrefix(ePath, root+"/dist") {
+				return []byte{}
+			}
+
+			eBuf, err = os.ReadFile(ePath)
+		}
+
+		return eBuf
 	})
 
 	*buf = regex.Comp(`{(#|(?:[\w_\-]+|)=|)["']?([\w_\-]+)(\|.*?|)["']?}`).RepFunc(*buf, func(b func(int) []byte) []byte {
