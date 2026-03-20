@@ -13,6 +13,11 @@ type Plugin struct {
 
 var plugins *goutil.SyncMap[string, *Plugin] = goutil.NewMap[string, *Plugin]()
 
+// New creates a new plugin
+//
+//  @static (default: false):
+//  - true: call at compiletime
+//  - false: call at runtime
 func New(name string, cb func(args map[string]string, cont []byte, static bool) ([]byte, error), static ...bool) error {
 	if plugins.Has(name) {
 		return fmt.Errorf("Plugin '%s' already exists", name)
@@ -31,6 +36,11 @@ func New(name string, cb func(args map[string]string, cont []byte, static bool) 
 	return nil
 }
 
+// Get a plugin by name
+//
+//  @static (optional):
+//  - true: get plugin only if static
+//  - false: get plugin only if dynamic
 func Get(name string, static ...bool) (*Plugin, bool) {
 	if plugin, ok := plugins.Get(name); ok {
 		if len(static) == 0 {
@@ -43,6 +53,11 @@ func Get(name string, static ...bool) (*Plugin, bool) {
 	return &Plugin{}, false
 }
 
+// Has checks if plugin exists
+//
+//  @static (optional):
+//  - true: check plugin only if static
+//  - false: check plugin only if dynamic
 func Has(name string, static ...bool) bool {
 	if len(static) != 0 {
 		if plugin, ok := plugins.Get(name); ok && static[0] == plugin.static {
@@ -54,14 +69,17 @@ func Has(name string, static ...bool) bool {
 	return plugins.Has(name)
 }
 
+// Remove a plugin by name
 func Remove(name string) {
 	plugins.Del(name)
 }
 
+// Run plugin
 func (plugin *Plugin) Run(args map[string]string, cont []byte, static bool) ([]byte, error) {
 	return plugin.cb(args, cont, static)
 }
 
+// Static returns whether or not plugin is static (true) or dynamic (false)
 func (plugin *Plugin) Static() bool {
 	return plugin.static
 }

@@ -44,6 +44,7 @@ type Config struct {
 
 type Map map[string]string
 
+// New creates a new webserver
 func New(root string, config ...Config) (*App, error) {
 	var err error
 	root, err = filepath.Abs(root)
@@ -139,14 +140,26 @@ func New(root string, config ...Config) (*App, error) {
 	return app, nil
 }
 
-func (app *App) Listen() error {
-	//todo: may allow listen method to optionally override port
-	// make sure config can be updated with it
-	// also make sure static config vars are modified (or just make port dynamic)
+// Listen for http requests
+//
+// default port :8080
+//
+// note: ports can also be set in the config when creating a new server,
+// and can optionally be overwritten here.
+//
+//	@port (optional):
+//	- 1: HTTP Port
+//	- 2: SSL Port
+func (app *App) Listen(port ...uint16) error {
+	var portHTTP string
+	if len(port) != 0 && port[0] != 0 {
+		portHTTP = ":" + strconv.FormatUint(uint64(port[0]), 10)
+		app.Config.Port = port[0]
+	} else {
+		portHTTP = ":" + strconv.FormatUint(uint64(app.Config.Port), 10)
+	}
 
-	portHTTP := ":" + strconv.FormatUint(uint64(app.Config.Port), 10)
-
-	if app.Config.PortSSL == 0 {
+	if app.Config.PortSSL == 0 && len(port) < 2 {
 		server := &http.Server{
 			Addr:              portHTTP,
 			Handler:           app.mux,
@@ -165,7 +178,13 @@ func (app *App) Listen() error {
 		return nil
 	}
 
-	portSSL := ":" + strconv.FormatUint(uint64(app.Config.PortSSL), 10)
+	var portSSL string
+	if len(port) >= 2 && port[1] != 0 {
+		portSSL = ":" + strconv.FormatUint(uint64(port[1]), 10)
+		app.Config.PortSSL = port[1]
+	} else {
+		portSSL = ":" + strconv.FormatUint(uint64(app.Config.PortSSL), 10)
+	}
 
 	server := &http.Server{
 		Addr:              portSSL,

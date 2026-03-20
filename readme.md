@@ -86,6 +86,36 @@ The file `@error.html` automatically catches errors, sending `{status}` and `{me
       ...
     </article>
   }}
+
+  <!-- plugins/shortcodes can easily be embedded (similar to wordpress shortcodes) -->
+  {:plugin arg1="value" arg2 {
+    content
+  }}
+
+  <!-- this framework comes with some builtin plugins/functions -->
+  {:lorem}
 </body>
+
+```
+
+## plugins
+
+```go
+
+import (
+  plugins "github.com/tkdeng/nexusweb/plugins"
+)
+
+func init(){
+  // create new plugin
+  plugins.New("button", func(args map[string]string, cont []byte, static bool) ([]byte, error) {
+		return []byte("<button>"+args["name"]+"<button>"), nil
+	})
+
+  // create static plugin
+  plugins.New("fastbutton", func(args map[string]string, cont []byte, static bool) ([]byte, error) {
+		return []byte("<button>"+args["name"]+"<button>"), nil
+	}, true) // adding true makes this plugin run at compiletime
+}
 
 ```

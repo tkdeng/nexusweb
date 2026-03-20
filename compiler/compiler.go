@@ -41,8 +41,6 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 			return []byte{}
 		}
 
-		//todo: add recursion prevention
-
 		if !strings.HasSuffix(ePath, ".html") {
 			ePath += ".html"
 		}
@@ -58,8 +56,6 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 
 			eBuf, err = os.ReadFile(ePath)
 		}
-
-		//todo: embed eBuf {@embeds}
 
 		return eBuf
 	})
@@ -136,11 +132,15 @@ func CompressHTML(buf *[]byte) {
 
 func Compile(root string, vars map[string]string) error {
 	if stat, err := os.Stat(root + "/pages"); err != nil || !stat.IsDir() {
-		if err != nil {
-			return err
-		} else {
+		if stat.IsDir() {
 			return fmt.Errorf("pages directory is missing")
 		}
+
+		os.MkdirAll(root+"/pages", 0755)
+		os.WriteFile(root+"/pages/#layout.html", defBufLayout, 0755)
+		os.WriteFile(root+"/pages/@error.html", defBufError, 0755)
+		os.WriteFile(root+"/pages/head.html", defBufHead, 0755)
+		os.WriteFile(root+"/pages/body.md", defBufBody, 0755)
 	}
 
 	os.RemoveAll(root + "/dist")
@@ -169,23 +169,23 @@ func Compile(root string, vars map[string]string) error {
 		}
 	}
 
-	if stat, err := os.Stat(root + "/pages/head.html"); err != nil || stat.IsDir() {
+	/* if stat, err := os.Stat(root + "/pages/head.html"); err != nil || stat.IsDir() {
 		if stat, err := os.Stat(root + "/pages/head.md"); err != nil || stat.IsDir() {
 			if err = os.WriteFile(root+"/pages/head.html", defBufHead, 0755); err != nil {
 				PrintMsg("error", "Error: Failed to write default home page head!")
 				fmt.Println(err)
 			}
 		}
-	}
+	} */
 
-	if stat, err := os.Stat(root + "/pages/body.html"); err != nil || stat.IsDir() {
+	/* if stat, err := os.Stat(root + "/pages/body.html"); err != nil || stat.IsDir() {
 		if stat, err := os.Stat(root + "/pages/body.md"); err != nil || stat.IsDir() {
 			if err = os.WriteFile(root+"/pages/body.md", defBufBody, 0755); err != nil {
 				PrintMsg("error", "Error: Failed to write default home page body!")
 				fmt.Println(err)
 			}
 		}
-	}
+	} */
 
 	compVars(&layoutBuf, vars)
 	CompressHTML(&layoutBuf)
@@ -211,7 +211,7 @@ func Compile(root string, vars map[string]string) error {
 				os.WriteFile(root+"/dist/"+string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte(".html"))), buf, 0755)
 			}
 		} else if file.IsDir() {
-			if err = compPages(root, root+"/pages/"+file.Name()); err != nil {
+			if err = compPages(root, root+"/pages/"+file.Name(), vars, &layoutBuf); err != nil {
 				PrintMsg("error", "Error: Failed to compile page!")
 				fmt.Println("  path:", root+"/pages/"+file.Name())
 				fmt.Println(err)
@@ -233,10 +233,28 @@ func Compile(root string, vars map[string]string) error {
 	return nil
 }
 
-func compPages(root string, path string) error {
+func compPages(root string, path string, vars map[string]string, layoutBuf *[]byte) error {
 	//todo: compile sub pages and directories
 
-	fmt.Println(root, path)
+	var buf []byte
+
+	if lBuf, err := getPageBuf(string(regex.Comp(`^(%1)/pages/([^\/]+)(?:\/.*|)$`, root).Rep([]byte(path), []byte("$1/pages/$2"))), path+"/#layout"); err == nil {
+		buf = compEmbed(root+"/pages", path, path+"/#layout", lBuf)
+	} else {
+		buf = compEmbed(root+"/pages", path, path+"/#layout", *layoutBuf)
+	}
+
+	compVars(&buf, vars)
+
+	distPath := string(regex.Comp(`^(%1)/pages/([^\/]+)(?:\/.*|)$`, root).Rep([]byte(path), []byte("$1/dist/$2")))
+
+	os.MkdirAll(distPath, 0755)
+	if err := os.WriteFile(distPath+"/index.html", buf, 0755); err != nil {
+		PrintMsg("error", "Error: Failed to write home page!")
+		fmt.Println(err)
+	}
+
+	// fmt.Println(string(buf))
 
 	return nil
 }
@@ -345,10 +363,23 @@ func getPageBuf(root string, path string) ([]byte, error) {
 		}
 	}
 
+	if err != nil {
+		dPath := string(regex.Comp(`\/([^\/]+)$`).Rep([]byte(path), []byte("/@$1")))
+		buf, err = os.ReadFile(dPath + ".html")
+		if err != nil {
+			buf, err = os.ReadFile(dPath + ".md")
+			if err == nil {
+				if err := Markdown(&buf); err != nil {
+					return []byte{}, err
+				}
+			}
+		}
+	}
+
 	for err != nil {
 		path = string(regex.Comp(`\/[^\/]+\/([^\/]+)$`).Rep([]byte(path), []byte("/$1")))
 		if !strings.HasPrefix(path, root) {
-			return []byte{}, os.ErrExist
+			return []byte{}, os.ErrNotExist
 		}
 
 		buf, err = os.ReadFile(path + ".html")
@@ -357,6 +388,19 @@ func getPageBuf(root string, path string) ([]byte, error) {
 			if err == nil {
 				if err := Markdown(&buf); err != nil {
 					return []byte{}, err
+				}
+			}
+		}
+
+		if err != nil {
+			dPath := string(regex.Comp(`\/([^\/]+)$`).Rep([]byte(path), []byte("/@$1")))
+			buf, err = os.ReadFile(dPath + ".html")
+			if err != nil {
+				buf, err = os.ReadFile(dPath + ".md")
+				if err == nil {
+					if err := Markdown(&buf); err != nil {
+						return []byte{}, err
+					}
 				}
 			}
 		}
