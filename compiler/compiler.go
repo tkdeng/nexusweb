@@ -11,8 +11,17 @@ import (
 	"github.com/tkdeng/regex"
 )
 
-//go:embed templates/layout.html
-var defLayoutBuf []byte
+//go:embed templates/#layout.html
+var defBufLayout []byte
+
+//go:embed templates/@error.html
+var defBufError []byte
+
+//go:embed templates/head.html
+var defBufHead []byte
+
+//go:embed templates/body.md
+var defBufBody []byte
 
 func Render(buf *[]byte, root string, path string, vars map[string]string) error {
 	*buf = regex.Comp(`(?s){([?!])\$?([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
@@ -31,6 +40,8 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 			return []byte{}
 		}
 
+		//todo: add recursion prevention
+
 		if !strings.HasSuffix(ePath, ".html") {
 			ePath += ".html"
 		}
@@ -46,6 +57,8 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 
 			eBuf, err = os.ReadFile(ePath)
 		}
+
+		//todo: embed eBuf {@embeds}
 
 		return eBuf
 	})
@@ -82,8 +95,6 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 		return []byte{}
 	})
 
-	fmt.Println(string(*buf))
-
 	return nil
 }
 
@@ -108,39 +119,81 @@ func Compile(root string, vars map[string]string) error {
 		}
 	}
 
-	// os.RemoveAll(root + "/dist")
-	// os.MkdirAll(root+"/dist", 0755)
+	os.RemoveAll(root + "/dist")
+	os.MkdirAll(root+"/dist", 0755)
 
 	layoutBuf, err := os.ReadFile(root + "/pages/#layout.html")
 	if err != nil {
 		layoutBuf, err = os.ReadFile(root + "/pages/#layout.md")
 		if err != nil {
-			layoutBuf = defLayoutBuf
-			os.WriteFile(root+"/pages/#layout.html", layoutBuf, 0755)
+			layoutBuf = defBufLayout
+			if err = os.WriteFile(root+"/pages/#layout.html", layoutBuf, 0755); err != nil {
+				PrintMsg("error", "Error: Failed to write default layout page!")
+				fmt.Println(err)
+			}
 		} else if err := Markdown(&layoutBuf); err != nil {
 			return err
 		}
 	}
 
-	//todo: add layout const vars and logic
+	if stat, err := os.Stat(root + "/pages/@error.html"); err != nil || stat.IsDir() {
+		if stat, err := os.Stat(root + "/pages/@error.md"); err != nil || stat.IsDir() {
+			if err = os.WriteFile(root+"/pages/@error.html", defBufError, 0755); err != nil {
+				PrintMsg("error", "Error: Failed to write default @error page!")
+				fmt.Println(err)
+			}
+		}
+	}
+
+	if stat, err := os.Stat(root + "/pages/head.html"); err != nil || stat.IsDir() {
+		if stat, err := os.Stat(root + "/pages/head.md"); err != nil || stat.IsDir() {
+			if err = os.WriteFile(root+"/pages/head.html", defBufHead, 0755); err != nil {
+				PrintMsg("error", "Error: Failed to write default home page head!")
+				fmt.Println(err)
+			}
+		}
+	}
+
+	if stat, err := os.Stat(root + "/pages/body.html"); err != nil || stat.IsDir() {
+		if stat, err := os.Stat(root + "/pages/body.md"); err != nil || stat.IsDir() {
+			if err = os.WriteFile(root+"/pages/body.md", defBufBody, 0755); err != nil {
+				PrintMsg("error", "Error: Failed to write default home page body!")
+				fmt.Println(err)
+			}
+		}
+	}
 
 	compVars(&layoutBuf, vars)
-
-	// fmt.Println(string(layoutBuf))
-
-	return nil
-
 	CompressHTML(&layoutBuf)
-	os.WriteFile(root+"/dist/#layout.html", layoutBuf, 0755)
+	if err = os.WriteFile(root+"/dist/#layout.html", layoutBuf, 0755); err != nil {
+		PrintMsg("error", "Error: Failed to write root #layout page!")
+		fmt.Println(err)
+	}
 
-	buf := compEmbed(root+"/pages", root+"/pages", layoutBuf)
+	buf := compEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf)
+	compVars(&buf, vars)
 
-	// fmt.Println(string(buf))
-	_ = buf
+	if err = os.WriteFile(root+"/dist/index.html", buf, 0755); err != nil {
+		PrintMsg("error", "Error: Failed to write home page!")
+		fmt.Println(err)
+	}
 
-	//todo: add vars and logic
-
-	//todo: compile sub pages and directories
+	fileList, err := os.ReadDir(root + "/pages")
+	for _, file := range fileList {
+		if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
+			if buf, err := os.ReadFile(root + "/pages/" + file.Name()); err == nil {
+				buf := compEmbed(root+"/pages", root+"/pages", root+"/pages/"+string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{})), buf)
+				compVars(&buf, vars)
+				os.WriteFile(root+"/dist/"+string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte(".html"))), buf, 0755)
+			}
+		} else if file.IsDir() {
+			if err = compPages(root, root+"/pages/"+file.Name()); err != nil {
+				PrintMsg("error", "Error: Failed to compile page!")
+				fmt.Println("  path:", root+"/pages/"+file.Name())
+				fmt.Println(err)
+			}
+		}
+	}
 
 	/* dirPath, err := goutil.JoinPath(root, "pages")
 	if err != nil {
@@ -170,10 +223,20 @@ func Compile(root string, vars map[string]string) error {
 	return nil
 }
 
-func compEmbed(root string, path string, buf []byte) []byte {
+func compPages(root string, path string) error {
+	//todo: compile sub pages and directories
+
+	return nil
+}
+
+func compEmbed(root string, path string, oPath string, buf []byte) []byte {
 	return regex.Comp(`{@([\w_\-]+)}`).RepFunc(buf, func(b func(int) []byte) []byte {
 		ePath, err := goutil.JoinPath(path, string(b(1)))
-		if err != nil {
+		if err != nil || ePath == oPath {
+			if ePath == oPath {
+				PrintMsg("warn", "Warning: Recursion Detected!")
+				fmt.Println("  path:", ePath)
+			}
 			return b(0)
 		}
 
@@ -182,7 +245,7 @@ func compEmbed(root string, path string, buf []byte) []byte {
 			return b(0)
 		}
 
-		eBuf = compEmbed(root, path, eBuf)
+		eBuf = compEmbed(root, path, ePath, eBuf)
 		if eBuf == nil {
 			return []byte{}
 		}
@@ -205,15 +268,17 @@ func compVars(buf *[]byte, vars map[string]string) {
 		if len(b(1)) == 0 {
 			if val, ok := vars[string(b(2))]; ok && val != "" {
 				return goutil.HTML.Escape([]byte(val))
-			} else {
+			} else if len(b(3)) != 0 {
 				return bytes.TrimPrefix(b(3), []byte{'|'})
 			}
+			return b(0)
 		} else if b(1)[0] == '#' {
 			if val, ok := vars[string(b(2))]; ok && val != "" {
 				return []byte(val)
-			} else {
+			} else if len(b(3)) != 0 {
 				return bytes.TrimPrefix(b(3), []byte{'|'})
 			}
+			return b(0)
 		}
 
 		key := bytes.TrimSuffix(b(1), []byte{'='})
@@ -230,7 +295,7 @@ func compVars(buf *[]byte, vars map[string]string) {
 			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
 		}
 
-		return []byte{}
+		return b(0)
 	})
 }
 

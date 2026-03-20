@@ -64,7 +64,7 @@ The file `@error.html` automatically catches errors, sending `{status}` and `{me
     {#rawHtmlVar} <!-- adding `#` means it will not escape html -->
   </div>
 
-  {$dynamicVar} <!-- adding `$` means it will be dynamic and compile at runtime -->
+  {$dynamicVar} <!-- adding `$` makes it dynamic and compile at runtime -->
 
   <!-- putting the key before the `=`, allows the whole arg to disappear when empty -->
   <div {class="myVar"}></div>

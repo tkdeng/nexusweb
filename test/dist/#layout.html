@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="{=viewport|width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0}"/>
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0"/>
   {?icon{
     <link rel="icon" href="{=icon}"/>
     <link rel="shortcut" href="{=icon}"/>
     <link rel="apple-touch-icon" href="{=icon}"/>
   }}
-  <link rel="manifest" href="{=manifest|/manifest.json}"/>
-  {?desc{<meta name="description" content="{=$desc}"/>}}
-  {?title{<title>{$title}</title>}}
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="description" content="{=$desc}"/>
+  <title>{$title}</title>
   <link rel="stylesheet" href="/assets/core.css">
   <script src="/assets/core.js" defer></script>
   {@head}
