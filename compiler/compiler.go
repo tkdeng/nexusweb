@@ -169,24 +169,6 @@ func Compile(root string, vars map[string]string) error {
 		}
 	}
 
-	/* if stat, err := os.Stat(root + "/pages/head.html"); err != nil || stat.IsDir() {
-		if stat, err := os.Stat(root + "/pages/head.md"); err != nil || stat.IsDir() {
-			if err = os.WriteFile(root+"/pages/head.html", defBufHead, 0755); err != nil {
-				PrintMsg("error", "Error: Failed to write default home page head!")
-				fmt.Println(err)
-			}
-		}
-	} */
-
-	/* if stat, err := os.Stat(root + "/pages/body.html"); err != nil || stat.IsDir() {
-		if stat, err := os.Stat(root + "/pages/body.md"); err != nil || stat.IsDir() {
-			if err = os.WriteFile(root+"/pages/body.md", defBufBody, 0755); err != nil {
-				PrintMsg("error", "Error: Failed to write default home page body!")
-				fmt.Println(err)
-			}
-		}
-	} */
-
 	compVars(&layoutBuf, vars)
 	CompressHTML(&layoutBuf)
 	if err = os.WriteFile(root+"/dist/#layout.html", layoutBuf, 0755); err != nil {
@@ -202,43 +184,43 @@ func Compile(root string, vars map[string]string) error {
 		fmt.Println(err)
 	}
 
-	fileList, err := os.ReadDir(root + "/pages")
-	for _, file := range fileList {
-		if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
-			if buf, err := os.ReadFile(root + "/pages/" + file.Name()); err == nil {
-				buf := compEmbed(root+"/pages", root+"/pages", root+"/pages/"+string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{})), buf)
-				compVars(&buf, vars)
-				os.WriteFile(root+"/dist/"+string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte(".html"))), buf, 0755)
-			}
-		} else if file.IsDir() {
-			if err = compPages(root, root+"/pages/"+file.Name(), vars, &layoutBuf); err != nil {
-				PrintMsg("error", "Error: Failed to compile page!")
-				fmt.Println("  path:", root+"/pages/"+file.Name())
-				fmt.Println(err)
+	if fileList, err := os.ReadDir(root + "/pages"); err == nil {
+		for _, file := range fileList {
+			if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
+				if buf, err := os.ReadFile(root + "/pages/" + file.Name()); err == nil {
+					if strings.HasSuffix(file.Name(), ".md") {
+						if err = Markdown(&buf); err != nil {
+							PrintMsg("warn", "Warning: Failed to compile markdown!")
+							fmt.Println("  path:", root+"/pages/"+file.Name())
+							fmt.Println(err)
+						}
+					}
+
+					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					buf = compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf)
+					compVars(&buf, vars)
+					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
+				}
+			} else if !file.IsDir() && strings.HasPrefix(file.Name(), "#") {
+				//todo: handle `#file.html`
+				// fmt.Println(file.Name())
+			} else if file.IsDir() {
+				if err = compPages(root, root+"/pages/"+file.Name(), vars, &layoutBuf); err != nil {
+					PrintMsg("error", "Error: Failed to compile page!")
+					fmt.Println("  path:", root+"/pages/"+file.Name())
+					fmt.Println(err)
+				}
 			}
 		}
 	}
-
-	//todo: pre compile pages to dist
-	// @pages should remain dynamic
-	// #layout pages should be copied over
-	// also, embed const vars when possible, otherwise keep placeholder for future vars
-
-	//todo: add separate function for precompiled vars (and runtime var methods)
-	// similar to what webx module does with {lorem}
-	// may make it easier for admins to expand on these
-	// may also add future extensions using {:plugin key=value} method
-	// and use {:plugin key=value { content }} for simplicity of multiline content
 
 	return nil
 }
 
 func compPages(root string, path string, vars map[string]string, layoutBuf *[]byte) error {
-	//todo: compile sub pages and directories
-
 	var buf []byte
 
-	if lBuf, err := getPageBuf(string(regex.Comp(`^(%1)/pages/([^\/]+)(?:\/.*|)$`, root).Rep([]byte(path), []byte("$1/pages/$2"))), path+"/#layout"); err == nil {
+	if lBuf, err := getPageBuf(string(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).Rep([]byte(path), []byte("$1/pages/$2"))), path+"/#layout"); err == nil {
 		buf = compEmbed(root+"/pages", path, path+"/#layout", lBuf)
 	} else {
 		buf = compEmbed(root+"/pages", path, path+"/#layout", *layoutBuf)
@@ -246,7 +228,7 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 
 	compVars(&buf, vars)
 
-	distPath := string(regex.Comp(`^(%1)/pages/([^\/]+)(?:\/.*|)$`, root).Rep([]byte(path), []byte("$1/dist/$2")))
+	distPath := string(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).Rep([]byte(path), []byte("$1/dist/$2")))
 
 	os.MkdirAll(distPath, 0755)
 	if err := os.WriteFile(distPath+"/index.html", buf, 0755); err != nil {
@@ -254,7 +236,47 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 		fmt.Println(err)
 	}
 
-	// fmt.Println(string(buf))
+	if fileList, err := os.ReadDir(path); err == nil {
+		for _, file := range fileList {
+			if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
+				if buf, err := os.ReadFile(path + "/" + file.Name()); err == nil {
+					if strings.HasSuffix(file.Name(), ".md") {
+						if err = Markdown(&buf); err != nil {
+							PrintMsg("warn", "Warning: Failed to compile markdown!")
+							fmt.Println("  path:", path+"/"+file.Name())
+							fmt.Println(err)
+						}
+					}
+
+					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					buf = compEmbed(root+"/pages", path, path+"/"+fileName, buf)
+					compVars(&buf, vars)
+					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
+				}
+			} else if !file.IsDir() && strings.HasPrefix(file.Name(), "#") {
+				if buf, err := os.ReadFile(path + "/" + file.Name()); err == nil {
+					if strings.HasSuffix(file.Name(), ".md") {
+						if err = Markdown(&buf); err != nil {
+							PrintMsg("warn", "Warning: Failed to compile markdown!")
+							fmt.Println("  path:", path+"/"+file.Name())
+							fmt.Println(err)
+						}
+					}
+
+					compVars(&buf, vars)
+					CompressHTML(&buf)
+					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
+				}
+			} else if file.IsDir() {
+				if err = compPages(root, path+"/"+file.Name(), vars, layoutBuf); err != nil {
+					PrintMsg("error", "Error: Failed to compile page!")
+					fmt.Println("  path:", root+"/pages/"+file.Name())
+					fmt.Println(err)
+				}
+			}
+		}
+	}
 
 	return nil
 }

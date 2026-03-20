@@ -147,64 +147,6 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	return nil
 }
 
-//! back
-/* func (ctx *Ctx) Render(path string, vars ...Map) error {
-	if path == "/" || path == "" {
-		path = "index"
-	} else if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-
-	filePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", path)
-	if err != nil {
-		return err
-	}
-
-	if !strings.HasSuffix(filePath, ".html") {
-		filePath += ".html"
-	}
-
-	buf, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
-		buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
-	}
-
-	varList := map[string]string{
-		"title":    goutil.Clean(ctx.router.app.Config.Title),
-		"apptitle": goutil.Clean(ctx.router.app.Config.AppTitle),
-		"desc":     goutil.Clean(ctx.router.app.Config.Desc),
-		"icon":     goutil.Clean(ctx.router.app.Config.Icon),
-		"public":   goutil.Clean(ctx.router.app.Config.PublicURI),
-		"debug":    goutil.ToType[string](ctx.router.app.Config.DebugMode),
-	}
-
-	for k, v := range ctx.router.app.Config.Vars {
-		varList[k] = goutil.Clean(v)
-	}
-
-	//todo: set other dynamic vars
-	// may also allow routers to store separate additional vars (on creation only)
-
-	for _, m := range vars {
-		// maps.Copy(varList, m)
-		for k, v := range m {
-			varList[k] = goutil.Clean(v)
-		}
-	}
-
-	if err = compiler.Render(&buf, ctx.router.app.Config.Root, filePath, varList); err != nil {
-		return err
-	}
-
-	ctx.w.WriteHeader(http.StatusOK)
-	ctx.w.Write(buf)
-	return nil
-} */
-
 func (ctx *Ctx) Error(path string, status int, msg string) error {
 	path = strings.TrimRight(path, "/")
 

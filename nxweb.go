@@ -12,6 +12,7 @@ import (
 
 	"github.com/tkdeng/goutil"
 	"github.com/tkdeng/nexusweb/compiler"
+	"github.com/tkdeng/regex"
 )
 
 type App struct {
@@ -127,7 +128,16 @@ func New(root string, config ...Config) (*App, error) {
 
 		//todo: add static assets handler
 
-		if err = ctx.Render(ctx.Path); err != nil {
+		//todo: prevent rendering @widget and #layout files
+
+		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).Match([]byte(ctx.Path)) {
+			if err = ctx.Render(ctx.Path); err != nil {
+				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Internal Server Error!"))
+				}
+			}
+		} else {
 			if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Internal Server Error!"))
