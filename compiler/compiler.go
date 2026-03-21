@@ -261,6 +261,10 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 		}
 	}
 
+	//todo: compile an rss.xml and sitemap.xml
+	// might also consider using a go variable to dynamically update and return it at runtime
+	// note: rss is for "Whats New" pages, sitemap is for browser indexing
+
 	return nil
 }
 

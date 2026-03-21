@@ -142,7 +142,15 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		return err
 	}
 
-	ctx.w.WriteHeader(http.StatusOK)
+	if status, ok := varList["status"]; ok {
+		if i, e := strconv.Atoi(status); e == nil {
+			ctx.w.WriteHeader(i)
+			ctx.w.Write(buf)
+			return nil
+		}
+	}
+
+	// ctx.w.WriteHeader(http.StatusOK)
 	ctx.w.Write(buf)
 	return nil
 }

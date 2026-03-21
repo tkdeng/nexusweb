@@ -76,7 +76,7 @@ func New(root string, config ...Config) (*App, error) {
 		config[0].Port = 8080
 	}
 	if config[0].AssetsURI == "" {
-		config[0].AssetsURI = "/"
+		config[0].AssetsURI = "/assets"
 	}
 
 	compVars := map[string]string{
@@ -108,7 +108,7 @@ func New(root string, config ...Config) (*App, error) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		// w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`pong!`))
 	})
 
@@ -124,6 +124,23 @@ func New(root string, config ...Config) (*App, error) {
 
 	app.router.app = app
 
+	// http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
+	// fs := NeuteredFileSystem{fs: http.Dir(root + "/assets")}
+	// mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(root + "/assets"))))
+
+	if config[0].PublicURI != "" && config[0].PublicURI != "/" {
+		uri := config[0].PublicURI
+		if !strings.HasPrefix(uri, "/") {
+			uri = "/" + uri
+		}
+		if !strings.HasSuffix(uri, "/") {
+			uri = uri + "/"
+		}
+
+		mux.Handle(uri, http.StripPrefix(uri, http.FileServer(http.Dir(root+"/public"))))
+	}
+
 	app.router.handler = func(w http.ResponseWriter, r *http.Request) {
 		ctx, err := app.router.newCtx(w, r)
 		if err != nil {
@@ -132,9 +149,9 @@ func New(root string, config ...Config) (*App, error) {
 			return
 		}
 
-		if strings.HasPrefix(ctx.Path, "/.well-known/") || strings.HasPrefix(ctx.Path, "/favicon.ico") {
-			return
-		}
+		//todo: use `/.well-known/appspecific/com.chrome.devtools.json` and others to detect dev tools and add caution to non admin user IPs
+		// may also do some research later on if I can extend this in any way (to make dev tools easier for developers or something)
+		// also make this feature optional, or add optional plugin hooks to api
 
 		// fmt.Println("-----")
 		// fmt.Println(ctx.Path)
@@ -145,6 +162,15 @@ func New(root string, config ...Config) (*App, error) {
 		// may auto minify assets, and update compiler code to use .min files
 		// or might let serveses like cloudflare handle .min files
 
+		if strings.HasPrefix(ctx.Path, config[0].AssetsURI) {
+			if path, err := goutil.JoinPath(root, "assets", strings.Replace(ctx.Path, config[0].AssetsURI, "", 1)); err == nil {
+				if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
+					http.ServeFile(w, r, path)
+					return
+				}
+			}
+		}
+
 		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).MatchStr(ctx.Path) {
 			if err = ctx.Render(ctx.Path); err != nil {
 				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
@@ -152,11 +178,13 @@ func New(root string, config ...Config) (*App, error) {
 					w.Write([]byte("Internal Server Error!"))
 				}
 			}
-		} else {
-			if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Internal Server Error!"))
-			}
+
+			return
+		}
+
+		if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal Server Error!"))
 		}
 	}
 
@@ -235,7 +263,7 @@ func (app *App) Listen(port ...uint16) error {
 		mux := http.NewServeMux()
 
 		mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
+			// w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`pong! (insecure)`))
 		})
 
