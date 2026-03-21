@@ -26,7 +26,7 @@ import (
 // @certPath: file path to store ssl certificates to
 // (this will generate a my/path.crt and my/path.key file)
 func (app *App) autoTLS(certPath string) (crt string, key string, err error) {
-	certPath = string(regex.Comp(`\.(crt|key)$`).RepLit([]byte(certPath), []byte{}))
+	certPath = regex.Comp(`\.(crt|key)$`).RepLitStr(certPath, "")
 
 	// generate ssl cert if needed
 	os.MkdirAll(filepath.Dir(certPath), 0755)

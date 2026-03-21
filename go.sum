@@ -13,8 +13,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tkdeng/goutil v0.10.1 h1:XxnIdwxNkgayhKeAoZFiD+q4cp6ck8sP3PngmD3Cjq8=
 github.com/tkdeng/goutil v0.10.1/go.mod h1:ddDSIiBYjCt/homrov6dCfvUH5u1j2Hv0BdzZfGWpPA=
-github.com/tkdeng/regex v1.0.0 h1:YAKfkEMpxbplCTT9mu7Pl49KCmRrlCGxqfROs32Dx5w=
-github.com/tkdeng/regex v1.0.0/go.mod h1:a+sj+UKs2xDKSm1PtQgHYd4TJu0ty925XiyVCa7245E=
+github.com/tkdeng/regex v1.2.0 h1:4OUAkUMGow5uXvcGnzZdhwzP+hyacHmU93xTUm/aZGE=
+github.com/tkdeng/regex v1.2.0/go.mod h1:a+sj+UKs2xDKSm1PtQgHYd4TJu0ty925XiyVCa7245E=
 github.com/tkdeng/simplewebserver v0.3.1 h1:Y3pWQkPN8Q1PyCX8Xmr+sgnkCXjiczitsRt3/gkdMrI=
 github.com/tkdeng/simplewebserver v0.3.1/go.mod h1:qWesnNGwofZcvDXYDM6dx8kTY6Ae299vbee7/JjeMMQ=
 github.com/tklauser/go-sysconf v0.3.14 h1:g5vzr9iPFFz24v2KZXs/pvpvh8/V9Fw6vQK5ZZb78yU=

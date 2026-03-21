@@ -29,16 +29,16 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 		val, ok := vars[string(b(2))]
 
 		if (b(1)[0] == '?' && (!ok || val == "")) || (b(1)[0] == '!' && (ok && val != "")) {
-			return []byte{}
+			return nil
 		}
 
 		return b(3)
 	})
 
 	*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		ePath, err := goutil.JoinPath(string(regex.Comp(`\/[^\/]+$`).Rep([]byte(path), []byte{})), string(b(1)))
+		ePath, err := goutil.JoinPath(regex.Comp(`\/[^\/]+$`).RepStr(path, ""), string(b(1)))
 		if err != nil || !strings.HasPrefix(ePath, root+"/dist") {
-			return []byte{}
+			return nil
 		}
 
 		if !strings.HasSuffix(ePath, ".html") {
@@ -48,10 +48,10 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 		eBuf, err := os.ReadFile(ePath)
 
 		for err != nil {
-			ePath = string(regex.Comp(`\/[^\/]+\/([^\/]+)$`).Rep([]byte(ePath), []byte("/$1")))
+			ePath = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(ePath, "/$1")
 
 			if !strings.HasPrefix(ePath, root+"/dist") {
-				return []byte{}
+				return nil
 			}
 
 			eBuf, err = os.ReadFile(ePath)
@@ -89,7 +89,7 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
 		}
 
-		return []byte{}
+		return nil
 	})
 
 	*buf = regex.Comp(`(?s){:([\w_\-]+)((?:\s+[\w_\-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[\w_\-]+)|))+|)\s*(?:\{(.*?)\}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
@@ -97,7 +97,7 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 			args := map[string]string{}
 			regex.Comp(`([\w_\-]+)(?:\s*=\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
 				args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(2)))
-				return []byte{}
+				return nil
 			})
 
 			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), false)
@@ -106,13 +106,13 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 				PrintMsg("warn", "Warning: Plugin Error!")
 				fmt.Println("  plugin:", string(b(1)))
 				fmt.Println(err)
-				return []byte{}
+				return nil
 			}
 
 			return out
 		}
 
-		return []byte{}
+		return nil
 	})
 
 	return nil
@@ -196,7 +196,7 @@ func Compile(root string, vars map[string]string) error {
 						}
 					}
 
-					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
 					buf = compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf)
 					compVars(&buf, vars)
 					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
@@ -220,7 +220,7 @@ func Compile(root string, vars map[string]string) error {
 func compPages(root string, path string, vars map[string]string, layoutBuf *[]byte) error {
 	var buf []byte
 
-	if lBuf, err := getPageBuf(string(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).Rep([]byte(path), []byte("$1/pages/$2"))), path+"/#layout"); err == nil {
+	if lBuf, err := getPageBuf(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/pages/$2"), path+"/#layout"); err == nil {
 		buf = compEmbed(root+"/pages", path, path+"/#layout", lBuf)
 	} else {
 		buf = compEmbed(root+"/pages", path, path+"/#layout", *layoutBuf)
@@ -228,7 +228,7 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 
 	compVars(&buf, vars)
 
-	distPath := string(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).Rep([]byte(path), []byte("$1/dist/$2")))
+	distPath := regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/dist/$2")
 
 	os.MkdirAll(distPath, 0755)
 	if err := os.WriteFile(distPath+"/index.html", buf, 0755); err != nil {
@@ -248,7 +248,7 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 						}
 					}
 
-					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
 					buf = compEmbed(root+"/pages", path, path+"/"+fileName, buf)
 					compVars(&buf, vars)
 					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
@@ -265,7 +265,7 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 
 					compVars(&buf, vars)
 					CompressHTML(&buf)
-					fileName := string(regex.Comp(`\.(html|md)$`).RepLit([]byte(file.Name()), []byte{}))
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
 					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
 				}
 			} else if file.IsDir() {
@@ -297,11 +297,7 @@ func compEmbed(root string, path string, oPath string, buf []byte) []byte {
 			return b(0)
 		}
 
-		eBuf = compEmbed(root, path, ePath, eBuf)
-		if eBuf == nil {
-			return []byte{}
-		}
-		return eBuf
+		return compEmbed(root, path, ePath, eBuf)
 	})
 }
 
@@ -355,7 +351,7 @@ func compVars(buf *[]byte, vars map[string]string) {
 			args := map[string]string{}
 			regex.Comp(`([\w_\-]+)(?:\s*=\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
 				args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(2)))
-				return []byte{}
+				return nil
 			})
 
 			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), true)
@@ -386,7 +382,7 @@ func getPageBuf(root string, path string) ([]byte, error) {
 	}
 
 	if err != nil {
-		dPath := string(regex.Comp(`\/([^\/]+)$`).Rep([]byte(path), []byte("/@$1")))
+		dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
 		buf, err = os.ReadFile(dPath + ".html")
 		if err != nil {
 			buf, err = os.ReadFile(dPath + ".md")
@@ -399,7 +395,7 @@ func getPageBuf(root string, path string) ([]byte, error) {
 	}
 
 	for err != nil {
-		path = string(regex.Comp(`\/[^\/]+\/([^\/]+)$`).Rep([]byte(path), []byte("/$1")))
+		path = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(path, "/$1")
 		if !strings.HasPrefix(path, root) {
 			return []byte{}, os.ErrNotExist
 		}
@@ -415,7 +411,7 @@ func getPageBuf(root string, path string) ([]byte, error) {
 		}
 
 		if err != nil {
-			dPath := string(regex.Comp(`\/([^\/]+)$`).Rep([]byte(path), []byte("/@$1")))
+			dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
 			buf, err = os.ReadFile(dPath + ".html")
 			if err != nil {
 				buf, err = os.ReadFile(dPath + ".md")

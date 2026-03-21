@@ -58,7 +58,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 		return nil, fmt.Errorf("layout not found")
 	}
 
-	lPath := string(regex.Comp(`\/@([\w_\-\.]+)$`).RepLit([]byte(path), []byte("/#layout.html")))
+	lPath := regex.Comp(`\/@([\w_\-\.]+)$`).RepLitStr(path, "/#layout.html")
 
 	lFilePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath)
 	if err != nil {
@@ -67,7 +67,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 
 	lbuf, err := os.ReadFile(lFilePath)
 	for err != nil && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).Match([]byte(lPath)) {
-		lPath = string(regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).Rep([]byte(lPath), []byte("$1")))
+		lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
 
 		if lFilePath, err = goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath); err != nil {
 			return nil, err
@@ -102,7 +102,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	buf, err := os.ReadFile(filePath)
 
 	if err != nil {
-		filePath = string(regex.Comp(`\/([^\/]+)\.html$`).Rep([]byte(filePath), []byte("/$1/index.html")))
+		filePath = regex.Comp(`\/([^\/]+)\.html$`).RepStr(filePath, "/$1/index.html")
 		buf, err = os.ReadFile(filePath)
 	}
 
