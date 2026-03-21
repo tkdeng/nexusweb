@@ -28,6 +28,18 @@ var defBufHead []byte
 //go:embed templates/body.md
 var defBufBody []byte
 
+//go:embed templates/about.md
+var defBufAbout []byte
+
+//go:embed templates/more.md
+var defBufMore []byte
+
+//go:embed templates/header.html
+var defBufHeader []byte
+
+//go:embed templates/@widget.html
+var defBufWidget []byte
+
 func Render(buf *[]byte, root string, path string, vars map[string]string) error {
 	*buf = regex.Comp(`(?s){([?!])\$?([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
 		val, ok := vars[string(b(2))]
@@ -157,6 +169,14 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 		os.WriteFile(root+"/pages/@error.html", defBufError, 0755)
 		os.WriteFile(root+"/pages/head.html", defBufHead, 0755)
 		os.WriteFile(root+"/pages/body.md", defBufBody, 0755)
+
+		os.MkdirAll(root+"/pages/about", 0755)
+		os.WriteFile(root+"/pages/about/body.md", defBufAbout, 0755)
+		os.MkdirAll(root+"/pages/about/more", 0755)
+		os.WriteFile(root+"/pages/about/more/body.md", defBufMore, 0755)
+
+		os.WriteFile(root+"/pages/header.html", defBufHeader, 0755)
+		os.WriteFile(root+"/pages/@widget.html", defBufWidget, 0755)
 	}
 
 	os.RemoveAll(root + "/dist")
