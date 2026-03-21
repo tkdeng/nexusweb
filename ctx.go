@@ -54,7 +54,7 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, erro
 }
 
 func (ctx *Ctx) getLayout(path string) ([]byte, error) {
-	if !regex.Comp(`\/@([\w_\-\.]+)$`).Match([]byte(path)) {
+	if !regex.Comp(`\/@([\w_\-\.]+)$`).MatchStr(path) {
 		return nil, fmt.Errorf("layout not found")
 	}
 
@@ -66,7 +66,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	}
 
 	lbuf, err := os.ReadFile(lFilePath)
-	for err != nil && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).Match([]byte(lPath)) {
+	for err != nil && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).MatchStr(lPath) {
 		lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
 
 		if lFilePath, err = goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath); err != nil {

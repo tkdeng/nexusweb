@@ -128,7 +128,7 @@ func New(root string, config ...Config) (*App, error) {
 
 		//todo: add static assets handler
 
-		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).Match([]byte(ctx.Path)) {
+		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).MatchStr(ctx.Path) {
 			if err = ctx.Render(ctx.Path); err != nil {
 				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
 					w.WriteHeader(http.StatusInternalServerError)

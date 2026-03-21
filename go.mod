@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/tkdeng/goutil v0.10.1
-	github.com/tkdeng/regex v1.2.0
+	github.com/tkdeng/regex v1.2.1
 	github.com/tkdeng/simplewebserver v0.3.1
 )
 
