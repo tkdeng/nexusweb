@@ -1,5 +1,11 @@
-# Hello, World!
+---
+title: "Web Server"
+myvar: "example value"
+---
+{@header}
 
-{:plugin arg="123" arg2 {
-  content
-}}
+## Hello, World
+
+{myvar}
+
+{@widget}

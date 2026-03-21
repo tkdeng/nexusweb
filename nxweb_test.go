@@ -17,6 +17,6 @@ func Test(t *testing.T) {
 		t.Error(err)
 	}
 
-	// app.Listen()
+	app.Listen()
 	_ = app
 }

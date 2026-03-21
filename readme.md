@@ -119,3 +119,20 @@ func init(){
 }
 
 ```
+
+## Markdown
+
+```md
+
+---
+title: "Web Server"
+ymlvars: "my yml vars at top of page"
+---
+
+<!-- adding yml vars overrides {$vars} to a static value for this page -->
+<!-- these will be added at compiletime -->
+<!-- this feature is also supported in regular html files -->
+
+# Markdown Supported (based on github)
+
+```

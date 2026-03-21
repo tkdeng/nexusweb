@@ -1,3 +1,8 @@
-# About
+---
+title: "About | Web Server"
+---
+{@header}
 
-{:lorem}
+## About
+
+{:lorem 12}
