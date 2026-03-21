@@ -124,11 +124,6 @@ func New(root string, config ...Config) (*App, error) {
 
 	app.router.app = app
 
-	// http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-
-	// fs := NeuteredFileSystem{fs: http.Dir(root + "/assets")}
-	// mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(root + "/assets"))))
-
 	if config[0].PublicURI != "" && config[0].PublicURI != "/" {
 		uri := config[0].PublicURI
 		if !strings.HasPrefix(uri, "/") {

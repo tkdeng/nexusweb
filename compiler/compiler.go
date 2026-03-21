@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,7 +41,39 @@ var defBufHeader []byte
 //go:embed templates/@widget.html
 var defBufWidget []byte
 
-func Render(buf *[]byte, root string, path string, vars map[string]string) error {
+func Render(buf *[]byte, root string, path string, vars map[string]string, isWidget bool) error {
+	//todo: optimize performance
+
+	if isWidget {
+		*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
+			ePath, err := goutil.JoinPath(filepath.Dir(path), string(b(1)))
+			if err != nil || !strings.HasPrefix(ePath, root+"/dist") {
+				return nil
+			}
+
+			if !strings.HasSuffix(ePath, ".html") {
+				ePath += ".html"
+			}
+
+			eBuf, err := os.ReadFile(ePath)
+
+			for err != nil {
+				// ePath = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(ePath, "/$1")
+				ePath := filepath.Join(filepath.Dir(filepath.Dir(ePath)), filepath.Base(ePath))
+
+				if !strings.HasPrefix(ePath, root+"/dist") {
+					return nil
+				}
+
+				eBuf, err = os.ReadFile(ePath)
+			}
+
+			return eBuf
+		})
+	}
+
+	//todo: may merge into a single regex `{.*?}` then check smaller strings (to optimize performance)
+
 	*buf = regex.Comp(`(?s){([?!])\$?([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
 		val, ok := vars[string(b(2))]
 
@@ -49,31 +82,6 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 		}
 
 		return b(3)
-	})
-
-	*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		ePath, err := goutil.JoinPath(regex.Comp(`\/[^\/]+$`).RepStr(path, ""), string(b(1)))
-		if err != nil || !strings.HasPrefix(ePath, root+"/dist") {
-			return nil
-		}
-
-		if !strings.HasSuffix(ePath, ".html") {
-			ePath += ".html"
-		}
-
-		eBuf, err := os.ReadFile(ePath)
-
-		for err != nil {
-			ePath = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(ePath, "/$1")
-
-			if !strings.HasPrefix(ePath, root+"/dist") {
-				return nil
-			}
-
-			eBuf, err = os.ReadFile(ePath)
-		}
-
-		return eBuf
 	})
 
 	*buf = regex.Comp(`{(#|(?:[\w_\-]+|)=|)["']?\$?([\w_\-]+)(\|.*?|)["']?}`).RepFunc(*buf, func(b func(int) []byte) []byte {
@@ -337,11 +345,13 @@ func compEmbed(root string, path string, oPath string, buf []byte, domains []str
 				PrintMsg("warn", "Warning: Recursion Detected!")
 				fmt.Println("  path:", ePath)
 			}
+			// fmt.Println(string(b(1)))
 			return b(0)
 		}
 
 		eBuf, vars, err := getPageBuf(root, ePath, domains)
 		if err != nil {
+			// fmt.Println(string(b(1)))
 			return b(0)
 		}
 
@@ -503,7 +513,9 @@ func getPageBuf(root string, path string, domains []string) ([]byte, map[string]
 	}
 
 	for err != nil {
-		path = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(path, "/$1")
+		// path = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(path, "/$1")
+		path := filepath.Join(filepath.Dir(filepath.Dir(path)), filepath.Base(path))
+
 		if !strings.HasPrefix(path, root) {
 			return []byte{}, map[string]string{}, os.ErrNotExist
 		}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -86,8 +87,10 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 func (ctx *Ctx) Render(path string, vars ...Map) error {
 	if path == "/" || path == "" {
 		path = "index"
-	} else if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	} else if path[0] != '/' {
+		path = "/" + strings.TrimSuffix(path, ".html")
+	} else {
+		path = strings.TrimSuffix(path, ".html")
 	}
 
 	filePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", path)
@@ -95,14 +98,20 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		return err
 	}
 
-	if !strings.HasSuffix(filePath, ".html") {
+	isWidget := false
+	if filename := filepath.Base(filePath); filename[0] == '@' || filename == "index" {
 		filePath += ".html"
+		if filename[0] == '@' {
+			isWidget = true
+		}
+	} else {
+		filePath += "/index.html"
 	}
 
 	buf, err := os.ReadFile(filePath)
 
-	if err != nil {
-		filePath = regex.Comp(`\/([^\/]+)\.html$`).RepStr(filePath, "/$1/index.html")
+	if err != nil && strings.HasSuffix(filePath, "/index.html") {
+		filePath = strings.TrimSuffix(filePath, "/index.html")
 		buf, err = os.ReadFile(filePath)
 	}
 
@@ -110,9 +119,12 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		return err
 	}
 
-	if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
-		// buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
-		buf = bytes.ReplaceAll(lBuf, []byte("{@body}"), buf)
+	if isWidget {
+		//todo: optimize performance for ctx.getLayout method
+		if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
+			// buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
+			buf = bytes.ReplaceAll(lBuf, []byte("{@body}"), buf)
+		}
 	}
 
 	varList := map[string]string{
@@ -138,7 +150,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		}
 	}
 
-	if err = compiler.Render(&buf, ctx.router.app.Config.Root, filePath, varList); err != nil {
+	if err = compiler.Render(&buf, ctx.router.app.Config.Root, filePath, varList, isWidget); err != nil {
 		return err
 	}
 
