@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/html"
 	"github.com/tkdeng/goutil"
 	"github.com/tkdeng/nexusweb/plugins"
 	"github.com/tkdeng/regex"
@@ -118,19 +120,25 @@ func Render(buf *[]byte, root string, path string, vars map[string]string) error
 	return nil
 }
 
-func Markdown(buf *[]byte) error {
-	// fmt.Println(string(*buf))
+func CompressHTML(buf *[]byte, debugMode bool) {
+	// minify HTML
+	m := minify.New()
+	m.AddFunc("text/html", html.Minify)
 
-	//todo: compile markdown
+	m.Add("text/html", &html.Minifier{
+		KeepQuotes:       true,
+		KeepDocumentTags: true,
+		KeepEndTags:      true,
+		KeepWhitespace:   debugMode,
+	})
 
-	return nil
+	var b bytes.Buffer
+	if err := m.Minify("text/html", &b, bytes.NewBuffer(*buf)); err == nil {
+		*buf = b.Bytes()
+	}
 }
 
-func CompressHTML(buf *[]byte) {
-	//todo: compress html output
-}
-
-func Compile(root string, vars map[string]string) error {
+func Compile(root string, vars map[string]string, domains []string, debugMode bool) error {
 	if stat, err := os.Stat(root + "/pages"); err != nil || !stat.IsDir() {
 		if stat.IsDir() {
 			return fmt.Errorf("pages directory is missing")
@@ -155,8 +163,8 @@ func Compile(root string, vars map[string]string) error {
 				PrintMsg("error", "Error: Failed to write default layout page!")
 				fmt.Println(err)
 			}
-		} else if err := Markdown(&layoutBuf); err != nil {
-			return err
+		} else {
+			Markdown(&layoutBuf, domains)
 		}
 	}
 
@@ -170,13 +178,13 @@ func Compile(root string, vars map[string]string) error {
 	}
 
 	compVars(&layoutBuf, vars)
-	CompressHTML(&layoutBuf)
+	CompressHTML(&layoutBuf, debugMode)
 	if err = os.WriteFile(root+"/dist/#layout.html", layoutBuf, 0755); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
 		fmt.Println(err)
 	}
 
-	buf := compEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf)
+	buf := compEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains)
 	compVars(&buf, vars)
 
 	if err = os.WriteFile(root+"/dist/index.html", buf, 0755); err != nil {
@@ -186,28 +194,39 @@ func Compile(root string, vars map[string]string) error {
 
 	if fileList, err := os.ReadDir(root + "/pages"); err == nil {
 		for _, file := range fileList {
-			if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
-				if buf, err := os.ReadFile(root + "/pages/" + file.Name()); err == nil {
-					if strings.HasSuffix(file.Name(), ".md") {
-						if err = Markdown(&buf); err != nil {
-							PrintMsg("warn", "Warning: Failed to compile markdown!")
-							fmt.Println("  path:", root+"/pages/"+file.Name())
-							fmt.Println(err)
-						}
+			fName := file.Name()
+
+			if !file.IsDir() && strings.HasPrefix(fName, "@") {
+				if buf, err := os.ReadFile(root + "/pages/" + fName); err == nil {
+					if strings.HasSuffix(fName, ".md") {
+						Markdown(&buf, domains)
 					}
 
-					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
-					buf = compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf)
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
+					buf = compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains)
 					compVars(&buf, vars)
 					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
 				}
-			} else if !file.IsDir() && strings.HasPrefix(file.Name(), "#") {
-				//todo: handle `#file.html`
-				// fmt.Println(file.Name())
+			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
+				if fName == "#layout.html" || fName == "#layout.md" {
+					continue
+				}
+
+				if buf, err := os.ReadFile(root + "/pages/" + fName); err == nil {
+					if strings.HasSuffix(fName, ".md") {
+						Markdown(&buf, domains)
+					}
+
+					compVars(&buf, vars)
+					CompressHTML(&buf, debugMode)
+
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
+					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
+				}
 			} else if file.IsDir() {
-				if err = compPages(root, root+"/pages/"+file.Name(), vars, &layoutBuf); err != nil {
+				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, debugMode); err != nil {
 					PrintMsg("error", "Error: Failed to compile page!")
-					fmt.Println("  path:", root+"/pages/"+file.Name())
+					fmt.Println("  path:", root+"/pages/"+fName)
 					fmt.Println(err)
 				}
 			}
@@ -217,13 +236,13 @@ func Compile(root string, vars map[string]string) error {
 	return nil
 }
 
-func compPages(root string, path string, vars map[string]string, layoutBuf *[]byte) error {
+func compPages(root string, path string, vars map[string]string, domains []string, layoutBuf *[]byte, debugMode bool) error {
 	var buf []byte
 
-	if lBuf, err := getPageBuf(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/pages/$2"), path+"/#layout"); err == nil {
-		buf = compEmbed(root+"/pages", path, path+"/#layout", lBuf)
+	if lBuf, err := getPageBuf(regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/pages/$2"), path+"/#layout", domains); err == nil {
+		buf = compEmbed(root+"/pages", path, path+"/#layout", lBuf, domains)
 	} else {
-		buf = compEmbed(root+"/pages", path, path+"/#layout", *layoutBuf)
+		buf = compEmbed(root+"/pages", path, path+"/#layout", *layoutBuf, domains)
 	}
 
 	compVars(&buf, vars)
@@ -238,40 +257,34 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 
 	if fileList, err := os.ReadDir(path); err == nil {
 		for _, file := range fileList {
-			if !file.IsDir() && strings.HasPrefix(file.Name(), "@") {
-				if buf, err := os.ReadFile(path + "/" + file.Name()); err == nil {
-					if strings.HasSuffix(file.Name(), ".md") {
-						if err = Markdown(&buf); err != nil {
-							PrintMsg("warn", "Warning: Failed to compile markdown!")
-							fmt.Println("  path:", path+"/"+file.Name())
-							fmt.Println(err)
-						}
+			fName := file.Name()
+
+			if !file.IsDir() && strings.HasPrefix(fName, "@") {
+				if buf, err := os.ReadFile(path + "/" + fName); err == nil {
+					if strings.HasSuffix(fName, ".md") {
+						Markdown(&buf, domains)
 					}
 
-					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
-					buf = compEmbed(root+"/pages", path, path+"/"+fileName, buf)
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
+					buf = compEmbed(root+"/pages", path, path+"/"+fileName, buf, domains)
 					compVars(&buf, vars)
 					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
 				}
-			} else if !file.IsDir() && strings.HasPrefix(file.Name(), "#") {
-				if buf, err := os.ReadFile(path + "/" + file.Name()); err == nil {
-					if strings.HasSuffix(file.Name(), ".md") {
-						if err = Markdown(&buf); err != nil {
-							PrintMsg("warn", "Warning: Failed to compile markdown!")
-							fmt.Println("  path:", path+"/"+file.Name())
-							fmt.Println(err)
-						}
+			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
+				if buf, err := os.ReadFile(path + "/" + fName); err == nil {
+					if strings.HasSuffix(fName, ".md") {
+						Markdown(&buf, domains)
 					}
 
 					compVars(&buf, vars)
-					CompressHTML(&buf)
-					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(file.Name(), "")
+					CompressHTML(&buf, debugMode)
+					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
 				}
 			} else if file.IsDir() {
-				if err = compPages(root, path+"/"+file.Name(), vars, layoutBuf); err != nil {
+				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, debugMode); err != nil {
 					PrintMsg("error", "Error: Failed to compile page!")
-					fmt.Println("  path:", root+"/pages/"+file.Name())
+					fmt.Println("  path:", root+"/pages/"+fName)
 					fmt.Println(err)
 				}
 			}
@@ -281,7 +294,7 @@ func compPages(root string, path string, vars map[string]string, layoutBuf *[]by
 	return nil
 }
 
-func compEmbed(root string, path string, oPath string, buf []byte) []byte {
+func compEmbed(root string, path string, oPath string, buf []byte, domains []string) []byte {
 	return regex.Comp(`{@([\w_\-]+)}`).RepFunc(buf, func(b func(int) []byte) []byte {
 		ePath, err := goutil.JoinPath(path, string(b(1)))
 		if err != nil || ePath == oPath {
@@ -292,12 +305,12 @@ func compEmbed(root string, path string, oPath string, buf []byte) []byte {
 			return b(0)
 		}
 
-		eBuf, err := getPageBuf(root, ePath)
+		eBuf, err := getPageBuf(root, ePath, domains)
 		if err != nil {
 			return b(0)
 		}
 
-		return compEmbed(root, path, ePath, eBuf)
+		return compEmbed(root, path, ePath, eBuf, domains)
 	})
 }
 
@@ -370,26 +383,19 @@ func compVars(buf *[]byte, vars map[string]string) {
 	})
 }
 
-func getPageBuf(root string, path string) ([]byte, error) {
+func getPageBuf(root string, path string, domains []string) ([]byte, error) {
 	buf, err := os.ReadFile(path + ".html")
 	if err != nil {
-		buf, err = os.ReadFile(path + ".md")
-		if err == nil {
-			if err := Markdown(&buf); err != nil {
-				return []byte{}, err
-			}
+		if buf, err = os.ReadFile(path + ".md"); err == nil {
+			Markdown(&buf, domains)
 		}
 	}
 
 	if err != nil {
 		dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
-		buf, err = os.ReadFile(dPath + ".html")
-		if err != nil {
-			buf, err = os.ReadFile(dPath + ".md")
-			if err == nil {
-				if err := Markdown(&buf); err != nil {
-					return []byte{}, err
-				}
+		if buf, err = os.ReadFile(dPath + ".html"); err != nil {
+			if buf, err = os.ReadFile(dPath + ".md"); err == nil {
+				Markdown(&buf, domains)
 			}
 		}
 	}
@@ -400,29 +406,27 @@ func getPageBuf(root string, path string) ([]byte, error) {
 			return []byte{}, os.ErrNotExist
 		}
 
-		buf, err = os.ReadFile(path + ".html")
-		if err != nil {
-			buf, err = os.ReadFile(path + ".md")
-			if err == nil {
-				if err := Markdown(&buf); err != nil {
-					return []byte{}, err
-				}
+		if buf, err = os.ReadFile(path + ".html"); err != nil {
+			if buf, err = os.ReadFile(path + ".md"); err == nil {
+				Markdown(&buf, domains)
 			}
 		}
 
 		if err != nil {
 			dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
-			buf, err = os.ReadFile(dPath + ".html")
-			if err != nil {
-				buf, err = os.ReadFile(dPath + ".md")
-				if err == nil {
-					if err := Markdown(&buf); err != nil {
-						return []byte{}, err
-					}
+			if buf, err = os.ReadFile(dPath + ".html"); err != nil {
+				if buf, err = os.ReadFile(dPath + ".md"); err == nil {
+					Markdown(&buf, domains)
 				}
 			}
 		}
 	}
 
 	return buf, nil
+}
+
+func Live(root string, vars map[string]string) {
+	//todo: add live compiler with file change listener
+	// and limit to affected subdirs for performance
+	// note: parent pages may still need to update child subpages
 }

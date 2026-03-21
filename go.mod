@@ -3,9 +3,11 @@ module github.com/tkdeng/nexusweb
 go 1.24.5
 
 require (
+	github.com/tdewolff/minify/v2 v2.21.3
 	github.com/tkdeng/goutil v0.10.1
 	github.com/tkdeng/regex v1.2.1
 	github.com/tkdeng/simplewebserver v0.3.1
+	github.com/yuin/goldmark v1.7.17
 )
 
 require (
@@ -14,6 +16,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
+	github.com/tdewolff/parse/v2 v2.7.20 // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.9.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect

@@ -41,6 +41,8 @@ type Config struct {
 	DebugMode bool
 
 	Root string
+
+	Domains []string
 }
 
 type Map map[string]string
@@ -87,7 +89,7 @@ func New(root string, config ...Config) (*App, error) {
 		compVars[k] = goutil.Clean(v)
 	}
 
-	err = compiler.Compile(root, compVars)
+	err = compiler.Compile(root, compVars, config[0].Domains, config[0].DebugMode)
 	if err != nil {
 		return &App{}, err
 	}
