@@ -11,6 +11,7 @@ func Test(t *testing.T) {
 		Domains: []string{
 			"localhost",
 		},
+		PublicURI: "/public",
 	})
 
 	if err != nil {

@@ -28,6 +28,7 @@ type Config struct {
 	Desc     string
 	Icon     string
 
+	AssetsURI string
 	PublicURI string
 
 	Origins []string
@@ -74,12 +75,16 @@ func New(root string, config ...Config) (*App, error) {
 	if config[0].Port == 0 {
 		config[0].Port = 8080
 	}
+	if config[0].AssetsURI == "" {
+		config[0].AssetsURI = "/"
+	}
 
 	compVars := map[string]string{
 		"title":    goutil.Clean(config[0].Title),
 		"apptitle": goutil.Clean(config[0].AppTitle),
 		"desc":     goutil.Clean(config[0].Desc),
 		"icon":     goutil.Clean(config[0].Icon),
+		"assets":   goutil.Clean(config[0].AssetsURI),
 		"public":   goutil.Clean(config[0].PublicURI),
 		"debug":    goutil.ToType[string](config[0].DebugMode),
 	}
@@ -92,6 +97,12 @@ func New(root string, config ...Config) (*App, error) {
 	err = compiler.Compile(root, compVars, config[0].Domains, config[0].DebugMode)
 	if err != nil {
 		return &App{}, err
+	}
+
+	os.MkdirAll(root+"/assets", 0755)
+
+	if config[0].PublicURI != "" {
+		os.MkdirAll(root+"/public", 0755)
 	}
 
 	mux := http.NewServeMux()
@@ -129,6 +140,10 @@ func New(root string, config ...Config) (*App, error) {
 		// fmt.Println(ctx.Path)
 
 		//todo: add static assets handler
+		// use config[0].AssetsURI and config[0].PublicURI
+		// may also auto compile go wasm
+		// may auto minify assets, and update compiler code to use .min files
+		// or might let serveses like cloudflare handle .min files
 
 		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).MatchStr(ctx.Path) {
 			if err = ctx.Render(ctx.Path); err != nil {
