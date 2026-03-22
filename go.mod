@@ -3,6 +3,7 @@ module github.com/tkdeng/nexusweb
 go 1.24.5
 
 require (
+	github.com/cespare/go-smaz v1.0.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/tdewolff/minify/v2 v2.21.3
 	github.com/tkdeng/goutil v0.10.1

@@ -1,15 +1,15 @@
 <!doctype html><html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="{=viewport|width=device-width,height=device-height,initial-scale=1,minimum-scale=1}">
-{?icon{
+<meta name="viewport" content="{=viewport|width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0}">
+{?icon{%
 <link rel="icon" href="{=icon}">
 <link rel="shortcut" href="{=icon}">
 <link rel="apple-touch-icon" href="{=icon}">
-}}
+%}}
 <link rel="manifest" href="{=manifest|/manifest.json}">
-{?desc{<meta name="description" content="{=$desc}">}}
-{?title{<title>{$title}</title>}}
+{?desc{%<meta name="description" content="{=$desc}">%}}
+{?title{%<title>{$title}</title>%}}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/script.js"></script>
@@ -26,18 +26,24 @@
 </header>
 </p>
 <h2 id="hello-world">Hello, World</h2>
-<p>{myvar}</p>
+<p>example value</p>
 <p><h2>Widget</h2>
-<p>{:lorem-d}</p>
+<p>Ventre vae ea potuere, praeditum ipsa grex inest repleo necessitatis pertinet multiplicitas pro eam sat animi os superbiae ipsa hi. Me an canora eam amo desuper incertum sat cura iustum mel cadavere nuntios redemit agit re deerat aquae. Libeat a voce pro voluptate salubritatis tua, honestis, iucundiora flatus satietatis clamat te. Sedem infirmos spatiatus plena da valeret re se re tot da, illa diligit en tu digna sentire quae.</p>
 </p>
 <div class="{=class}" {arg="arg1"}></div>
 <p>{arg2}</p>
 <p>{$arg3}</p>
-<p>{?arg4 {test4}}</p>
-<p>{!arg5 {test5</p>
-<p>{myvar}}}</p>
+{?arg4 {%
+  test4
+%}}
+{!arg5 {%
+  test5
+<p>{myvar}</p>
+%}}
 <p>{#html}</p>
-<p>{:plug1 arg="arg1" arg2 {content}}</p>
+{:plug1 arg="arg1" arg2{%
+  content
+%}}
 <p>{:plug2 arg="arg1" arg2}</p>
 
 </body>

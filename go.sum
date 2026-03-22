@@ -1,3 +1,5 @@
+github.com/cespare/go-smaz v1.0.0 h1:CUrrqIzakjINfWkdyNrVhtDKcGmdKkdB9AW7ke5nJ+M=
+github.com/cespare/go-smaz v1.0.0/go.mod h1:h77Hd4Dz/EPofhYvhkSuEyM0+6vyP3ckmSoBxTcKyxk=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246 h1:m0+1paUpmLlBpUxldAEvJZVCrNQpt2iyecCw4TdHdOc=

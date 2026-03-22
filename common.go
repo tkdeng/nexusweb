@@ -176,6 +176,23 @@ func GenRsaKey(crtPath string, keyPath string) error {
 	return nil
 }
 
+// Gzip will compress the given bytes and save them to a gzip file at the specified path
+func Gzip(path string, data []byte) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// NewWriterLevel lets you balance speed vs compression ratio
+	// gzip.DefaultCompression is usually the best "set and forget"
+	gz := gzip.NewWriter(file)
+	defer gz.Close()
+
+	_, err = gz.Write(data)
+	return err
+}
+
 // Gunzip will decompress a gzip file and return the bytes
 func Gunzip(path string) ([]byte, error) {
 	file, err := os.Open(path)

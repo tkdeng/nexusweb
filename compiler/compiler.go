@@ -12,6 +12,7 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/html"
 	"github.com/tkdeng/goutil"
+	"github.com/tkdeng/nexusweb/compress"
 	"github.com/tkdeng/nexusweb/plugins"
 	"github.com/tkdeng/regex"
 	"gopkg.in/yaml.v3"
@@ -41,198 +42,58 @@ var defBufHeader []byte
 //go:embed templates/@widget.html
 var defBufWidget []byte
 
-func Render(buf *[]byte, root string, path string, vars map[string]string, isWidget bool) error {
-	//todo: optimize performance (may eventually try to merge with go templ)
+func ReadFileHTML(name string, domains []string) ([]byte, map[string]string, error) {
+	var buf []byte
+	var err error
+	var isMD bool
 
-	if isWidget {
-		*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-			ePath, err := goutil.JoinPath(filepath.Dir(path), string(b(1)))
-			if err != nil || !strings.HasPrefix(ePath, root+"/dist") {
-				return nil
-			}
+	if strings.HasSuffix(name, ".html") {
+		buf, err = os.ReadFile(name + ".html")
 
-			if !strings.HasSuffix(ePath, ".html") {
-				ePath += ".html"
-			}
+		if err != nil {
+			return []byte{}, map[string]string{}, err
+		}
+	} else if strings.HasSuffix(name, ".md") {
+		isMD = true
+		buf, err = os.ReadFile(name + ".md")
 
-			eBuf, err := os.ReadFile(ePath)
+		if err != nil {
+			return []byte{}, map[string]string{}, err
+		}
+	} else {
+		buf, err = os.ReadFile(name + ".html")
+		if err != nil {
+			isMD = true
+			buf, err = os.ReadFile(name + ".md")
+		}
 
-			for err != nil {
-				// ePath = regex.Comp(`\/[^\/]+\/([^\/]+)$`).RepStr(ePath, "/$1")
-				ePath = filepath.Join(filepath.Dir(filepath.Dir(ePath)), filepath.Base(ePath))
-
-				if !strings.HasPrefix(ePath, root+"/dist") {
-					return nil
-				}
-
-				eBuf, err = os.ReadFile(ePath)
-			}
-
-			return eBuf
-		})
+		if err != nil {
+			return []byte{}, map[string]string{}, err
+		}
 	}
 
-	//todo: may merge into a single regex `{.*?}` then check smaller strings (to optimize performance)
+	var ymlVars map[string]string
+	if !isMD {
+		ymlVars = getPageYml(&buf, name+".html")
+	} else {
+		ymlVars = getPageYml(&buf, name+".md")
+	}
 
-	// `{([?!:#=]?)\s*\$?([\w_\-]+)\s*(.*?)\s*(?:{((?:[\r\n\s]|.)*?)}|)}`
-	// `(?s){([?!:#=]?)\s*\$?([\w_\-]+)\s*([^\r\n]*?)\s*(?:{(.*?)}|)}`
-	*buf = regex.Comp(`(?s){([?!:#=]?)\s*\$?([\w_\-]+)\s*([^\r\n]*?)\s*(?:{(.*?)}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		var t byte
-		if len(b(1)) != 0 {
-			t = b(1)[0]
-		}
-		name := b(2)
-		atts := b(3)
-		cont := b(4)
+	encodeVars(&buf)
 
-		fmt.Println("-----")
-		fmt.Println(string(b(0)))
+	if isMD {
+		Markdown(&buf, domains)
+	}
 
-		switch t {
-		case '?', '!':
-			val, ok := vars[string(name)]
-			if (t == '?' && (!ok || val == "")) || (t == '!' && (ok && val != "")) {
-				return nil
-			}
+	return buf, ymlVars, nil
+}
 
-			if len(cont) != 0 {
-				if err := Render(&cont, root, path, vars, false); err == nil {
-					return cont
-				}
-			}
-			return nil
-		case ':':
-			if plugin, ok := plugins.Get(string(name)); ok {
-				args := map[string]string{}
-				ind := 0
-				regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
-					if len(b(2)) == 0 {
-						args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
-						ind++
-					} else {
-						args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
-					}
-					return nil
-				})
+func WriteFileHTML(name string, data []byte) error {
+	name = strings.TrimSuffix(name, ".html")
+	name = strings.TrimSuffix(name, ".md")
 
-				if len(cont) != 0 {
-					if err := Render(&cont, root, path, vars, false); err != nil {
-						cont = []byte{}
-					}
-				}
-
-				out, err := plugin.Run(args, bytes.TrimSpace(cont), false)
-				if err != nil {
-					PrintMsg("warn", "Warning: Plugin Error!")
-					fmt.Println("  plugin:", string(b(1)))
-					fmt.Println(err)
-					return nil
-				}
-
-				return out
-			}
-		case '#':
-			if val, ok := vars[string(name)]; ok && val != "" {
-				return []byte(val)
-			} else if len(atts) != 0 && atts[0] == '|' {
-				return atts[1:]
-			}
-		case '=':
-			if val, ok := vars[string(name)]; ok && val != "" {
-				return goutil.HTML.EscapeArgs([]byte(val))
-			} else if len(atts) != 0 && atts[0] == '|' {
-				return atts[1:]
-			}
-		default:
-			if len(atts) != 0 && atts[0] == '=' {
-				if val, ok := vars[string(bytes.Trim(atts[1:], "\"' \t"))]; ok && val != "" {
-					return regex.JoinBytes(name, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
-				}
-				return nil
-			}
-
-			if val, ok := vars[string(name)]; ok && val != "" {
-				return goutil.HTML.Escape([]byte(val))
-			} else if len(atts) != 0 && atts[0] == '|' {
-				return atts[1:]
-			}
-		}
-
-		return nil
-	})
-
-	/* *buf = regex.Comp(`(?s){([?!])\$?([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		val, ok := vars[string(b(2))]
-
-		if (b(1)[0] == '?' && (!ok || val == "")) || (b(1)[0] == '!' && (ok && val != "")) {
-			return nil
-		}
-
-		return b(3)
-	})
-
-	*buf = regex.Comp(`{(#|(?:[\w_\-]+|)=|)["']?\$?([\w_\-]+)(\|.*?|)["']?}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		if len(b(1)) == 0 {
-			if val, ok := vars[string(b(2))]; ok && val != "" {
-				return goutil.HTML.Escape([]byte(val))
-			} else {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-		} else if b(1)[0] == '#' {
-			if val, ok := vars[string(b(2))]; ok && val != "" {
-				return []byte(val)
-			} else {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-		}
-
-		key := bytes.TrimSuffix(b(1), []byte{'='})
-
-		if val, ok := vars[string(b(2))]; ok && val != "" {
-			if len(key) == 0 {
-				return goutil.HTML.EscapeArgs([]byte(val))
-			}
-			return regex.JoinBytes(key, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
-		} else if len(b(3)) != 0 {
-			if len(key) == 0 {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
-		}
-
-		return nil
-	})
-
-	*buf = regex.Comp(`(?s){:([\w_\-]+)((?:\s+[\w_\-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[\w_\-]+)|))+|)\s*(?:\{(.*?)\}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		if plugin, ok := plugins.Get(string(b(1))); ok {
-			args := map[string]string{}
-			ind := 0
-			regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
-				if len(b(2)) == 0 {
-					args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
-					ind++
-				} else {
-					args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
-				}
-				return nil
-			})
-
-			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), false)
-
-			if err != nil {
-				PrintMsg("warn", "Warning: Plugin Error!")
-				fmt.Println("  plugin:", string(b(1)))
-				fmt.Println(err)
-				return nil
-			}
-
-			return out
-		}
-
-		return nil
-	}) */
-
-	return nil
+	decodeVars(&data)
+	return os.WriteFile(name+".html", data, 0755)
 }
 
 func CompressHTML(buf *[]byte, debugMode bool) {
@@ -260,40 +121,38 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 		}
 
 		os.MkdirAll(root+"/pages", 0755)
-		os.WriteFile(root+"/pages/#layout.html", defBufLayout, 0755)
-		os.WriteFile(root+"/pages/@error.html", defBufError, 0755)
-		os.WriteFile(root+"/pages/head.html", defBufHead, 0755)
-		os.WriteFile(root+"/pages/body.md", defBufBody, 0755)
+		os.WriteFile(root+"/pages/#layout.html", recodeVars(defBufLayout), 0755)
+		os.WriteFile(root+"/pages/@error.html", recodeVars(defBufError), 0755)
+		os.WriteFile(root+"/pages/head.html", recodeVars(defBufHead), 0755)
+		os.WriteFile(root+"/pages/body.md", recodeVars(defBufBody), 0755)
 
 		os.MkdirAll(root+"/pages/about", 0755)
-		os.WriteFile(root+"/pages/about/body.md", defBufAbout, 0755)
+		os.WriteFile(root+"/pages/about/body.md", recodeVars(defBufAbout), 0755)
 		os.MkdirAll(root+"/pages/about/more", 0755)
-		os.WriteFile(root+"/pages/about/more/body.md", defBufMore, 0755)
+		os.WriteFile(root+"/pages/about/more/body.md", recodeVars(defBufMore), 0755)
 
-		os.WriteFile(root+"/pages/header.html", defBufHeader, 0755)
-		os.WriteFile(root+"/pages/@widget.html", defBufWidget, 0755)
+		os.WriteFile(root+"/pages/header.html", recodeVars(defBufHeader), 0755)
+		os.WriteFile(root+"/pages/@widget.html", recodeVars(defBufWidget), 0755)
 	}
 
 	os.RemoveAll(root + "/dist")
 	os.MkdirAll(root+"/dist", 0755)
 
-	layoutBuf, err := os.ReadFile(root + "/pages/#layout.html")
+	layoutBuf, _, err := ReadFileHTML(root+"/pages/#layout", domains)
 	if err != nil {
-		layoutBuf, err = os.ReadFile(root + "/pages/#layout.md")
-		if err != nil {
-			layoutBuf = defBufLayout
-			if err = os.WriteFile(root+"/pages/#layout.html", layoutBuf, 0755); err != nil {
-				PrintMsg("error", "Error: Failed to write default layout page!")
-				fmt.Println(err)
-			}
-		} else {
-			Markdown(&layoutBuf, domains)
+		layoutBuf = defBufLayout
+		encodeVars(&layoutBuf)
+		if err = WriteFileHTML(root+"/pages/#layout", layoutBuf); err != nil {
+			PrintMsg("error", "Error: Failed to write default layout page!")
+			fmt.Println(err)
 		}
 	}
 
 	if stat, err := os.Stat(root + "/pages/@error.html"); err != nil || stat.IsDir() {
 		if stat, err := os.Stat(root + "/pages/@error.md"); err != nil || stat.IsDir() {
-			if err = os.WriteFile(root+"/pages/@error.html", defBufError, 0755); err != nil {
+			buf := defBufError
+			encodeVars(&buf)
+			if err = WriteFileHTML(root+"/pages/@error", buf); err != nil {
 				PrintMsg("error", "Error: Failed to write default @error page!")
 				fmt.Println(err)
 			}
@@ -302,7 +161,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 
 	compVars(&layoutBuf, vars, nil)
 	CompressHTML(&layoutBuf, debugMode)
-	if err = os.WriteFile(root+"/dist/#layout.html", layoutBuf, 0755); err != nil {
+	if err = WriteFileHTML(root+"/dist/#layout", layoutBuf); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
 		fmt.Println(err)
 	}
@@ -310,7 +169,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	buf, ymlVars := compEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains)
 	compVars(&buf, vars, ymlVars)
 
-	if err = os.WriteFile(root+"/dist/index.html", buf, 0755); err != nil {
+	if err = WriteFileHTML(root+"/dist/index", buf); err != nil {
 		PrintMsg("error", "Error: Failed to write home page!")
 		fmt.Println(err)
 	}
@@ -320,31 +179,23 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 			fName := file.Name()
 
 			if !file.IsDir() && strings.HasPrefix(fName, "@") {
-				if buf, err := os.ReadFile(root + "/pages/" + fName); err == nil {
-					if strings.HasSuffix(fName, ".md") {
-						Markdown(&buf, domains)
-					}
-
+				if buf, _, err := ReadFileHTML(root+"/pages/"+fName, domains); err == nil {
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					buf, ymlVars := compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains)
 					compVars(&buf, vars, ymlVars)
-					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
+					WriteFileHTML(root+"/dist/"+fileName, buf)
 				}
 			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
 				if fName == "#layout.html" || fName == "#layout.md" {
 					continue
 				}
 
-				if buf, err := os.ReadFile(root + "/pages/" + fName); err == nil {
-					if strings.HasSuffix(fName, ".md") {
-						Markdown(&buf, domains)
-					}
-
+				if buf, _, err := ReadFileHTML(root+"/pages/"+fName, domains); err == nil {
 					compVars(&buf, vars, nil)
 					CompressHTML(&buf, debugMode)
 
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					os.WriteFile(root+"/dist/"+fileName+".html", buf, 0755)
+					WriteFileHTML(root+"/dist/"+fileName, buf)
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, debugMode); err != nil {
@@ -378,7 +229,7 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 	distPath := regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/dist/$2")
 
 	os.MkdirAll(distPath, 0755)
-	if err := os.WriteFile(distPath+"/index.html", buf, 0755); err != nil {
+	if err := WriteFileHTML(distPath+"/index", buf); err != nil {
 		PrintMsg("error", "Error: Failed to write home page!")
 		fmt.Println(err)
 	}
@@ -388,26 +239,18 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 			fName := file.Name()
 
 			if !file.IsDir() && strings.HasPrefix(fName, "@") {
-				if buf, err := os.ReadFile(path + "/" + fName); err == nil {
-					if strings.HasSuffix(fName, ".md") {
-						Markdown(&buf, domains)
-					}
-
+				if buf, _, err := ReadFileHTML(path+"/"+fName, domains); err == nil {
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					buf, ymlVars = compEmbed(root+"/pages", path, path+"/"+fileName, buf, domains)
 					compVars(&buf, vars, ymlVars)
-					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
+					WriteFileHTML(distPath+"/"+fileName, buf)
 				}
 			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
-				if buf, err := os.ReadFile(path + "/" + fName); err == nil {
-					if strings.HasSuffix(fName, ".md") {
-						Markdown(&buf, domains)
-					}
-
+				if buf, _, err := ReadFileHTML(path+"/"+fName, domains); err == nil {
 					compVars(&buf, vars, ymlVars)
 					CompressHTML(&buf, debugMode)
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					os.WriteFile(distPath+"/"+fileName+".html", buf, 0755)
+					WriteFileHTML(distPath+"/"+fileName, buf)
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, debugMode); err != nil {
@@ -432,13 +275,11 @@ func compEmbed(root string, path string, oPath string, buf []byte, domains []str
 				PrintMsg("warn", "Warning: Recursion Detected!")
 				fmt.Println("  path:", ePath)
 			}
-			// fmt.Println(string(b(1)))
 			return b(0)
 		}
 
 		eBuf, vars, err := getPageBuf(root, ePath, domains)
 		if err != nil {
-			// fmt.Println(string(b(1)))
 			return b(0)
 		}
 
@@ -459,121 +300,247 @@ func compEmbed(root string, path string, oPath string, buf []byte, domains []str
 }
 
 func compVars(buf *[]byte, vars map[string]string, ymlVars map[string]string) {
-	//todo: temp for debugging
-	return
+	regex.Comp(`(?s)<param data=["']?([^"'>]+)["']?>(.*?)</param>`).RepFunc(*buf, func(b func(int) []byte) []byte {
+		if dec, err := compress.UnZip(b(1)); err == nil {
+			data := regex.Comp(`^([?!:#=]?)(\$?)([\w_\-]+)\s*([^\r\n]*)$`).Split(dec)
 
-	if ymlVars != nil && len(ymlVars) != 0 {
-		*buf = regex.Comp(`(?s){([?!])\$?([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-			val, ok := ymlVars[string(b(2))]
-
-			if (b(1)[0] == '?' && (!ok || val == "")) || (b(1)[0] == '!' && (ok && val != "")) {
-				return b(0)
+			var t byte
+			if len(data[1]) != 0 {
+				t = data[1][0]
 			}
+			d := len(data[2]) != 0
+			name := data[3]
+			atts := data[4]
+			cont := b(2)
 
-			return b(3)
-		})
-
-		*buf = regex.Comp(`{(#|(?:[\w_\-]+|)=|)["']?\$?([\w_\-]+)(\|.*?|)["']?}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-			if len(b(1)) == 0 {
-				if val, ok := ymlVars[string(b(2))]; ok && val != "" {
-					return goutil.HTML.Escape([]byte(val))
-				} else {
-					return bytes.TrimPrefix(b(3), []byte{'|'})
+			switch t {
+			case '?', '!':
+				if ymlVars != nil && len(ymlVars) != 0 {
+					val, ok := ymlVars[string(name)]
+					if !((t == '?' && (!ok || val == "")) || (t == '!' && (ok && val != ""))) {
+						if len(cont) != 0 {
+							compVars(&cont, vars, ymlVars)
+							return cont
+						}
+						return []byte{}
+					}
 				}
-			} else if b(1)[0] == '#' {
-				if val, ok := ymlVars[string(b(2))]; ok && val != "" {
+
+				if d {
+					break
+				}
+
+				val, ok := vars[string(name)]
+				if !((t == '?' && (!ok || val == "")) || (t == '!' && (ok && val != ""))) {
+					if len(cont) != 0 {
+						compVars(&cont, vars, ymlVars)
+						return cont
+					}
+					return []byte{}
+				}
+			case ':':
+				if d {
+					break
+				}
+
+				if plugin, ok := plugins.Get(string(name)); ok {
+					args := map[string]string{}
+					ind := 0
+					regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
+						if len(b(2)) == 0 {
+							args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
+							ind++
+						} else {
+							args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
+						}
+						return nil
+					})
+
+					if len(cont) != 0 {
+						compVars(&cont, vars, ymlVars)
+					}
+
+					out, err := plugin.Run(args, bytes.TrimSpace(cont), true)
+					if err != nil {
+						PrintMsg("warn", "Warning: Plugin Error!")
+						fmt.Println("  plugin:", string(b(1)))
+						fmt.Println(err)
+						break
+					}
+
+					return out
+				}
+			case '#':
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return []byte(val)
+					}
+				}
+
+				if d {
+					break
+				}
+
+				if val, ok := vars[string(name)]; ok && val != "" {
 					return []byte(val)
-				} else {
-					return bytes.TrimPrefix(b(3), []byte{'|'})
 				}
-			}
+			case '=':
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return goutil.HTML.EscapeArgs([]byte(val))
+					}
+				}
 
-			key := bytes.TrimSuffix(b(1), []byte{'='})
+				if d {
+					break
+				}
 
-			if val, ok := ymlVars[string(b(2))]; ok && val != "" {
-				if len(key) == 0 {
+				if val, ok := vars[string(name)]; ok && val != "" {
 					return goutil.HTML.EscapeArgs([]byte(val))
 				}
-				return regex.JoinBytes(key, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
-			} else if len(b(3)) != 0 {
-				if len(key) == 0 {
-					return bytes.TrimPrefix(b(3), []byte{'|'})
+			default:
+				if len(atts) != 0 && atts[0] == '=' {
+					if ymlVars != nil && len(ymlVars) != 0 {
+						if val, ok := ymlVars[string(bytes.Trim(atts[1:], "\"' \t"))]; ok && val != "" {
+							return regex.JoinBytes(name, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
+						}
+					}
+
+					if d {
+						break
+					}
+
+					if val, ok := vars[string(bytes.Trim(atts[1:], "\"' \t"))]; ok && val != "" {
+						return regex.JoinBytes(name, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
+					}
+
+					break
 				}
-				return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
+
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return goutil.HTML.Escape([]byte(val))
+					}
+				}
+
+				if d {
+					break
+				}
+
+				if val, ok := vars[string(name)]; ok && val != "" {
+					return goutil.HTML.Escape([]byte(val))
+				}
 			}
-
-			return b(0)
-		})
-	}
-
-	*buf = regex.Comp(`(?s){([?!])([\w_\-]+)\s*{(.*?)}}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		val, ok := vars[string(b(2))]
-
-		if (b(1)[0] == '?' && (!ok || val == "")) || (b(1)[0] == '!' && (ok && val != "")) {
-			return b(0)
-		}
-
-		return b(3)
-	})
-
-	*buf = regex.Comp(`{(#|(?:[\w_\-]+|)=|)["']?([\w_\-]+)(\|.*?|)["']?}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		if len(b(1)) == 0 {
-			if val, ok := vars[string(b(2))]; ok && val != "" {
-				return goutil.HTML.Escape([]byte(val))
-			} else if len(b(3)) != 0 {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-			return b(0)
-		} else if b(1)[0] == '#' {
-			if val, ok := vars[string(b(2))]; ok && val != "" {
-				return []byte(val)
-			} else if len(b(3)) != 0 {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-			return b(0)
-		}
-
-		key := bytes.TrimSuffix(b(1), []byte{'='})
-
-		if val, ok := vars[string(b(2))]; ok && val != "" {
-			if len(key) == 0 {
-				return goutil.HTML.EscapeArgs([]byte(val))
-			}
-			return regex.JoinBytes(key, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
-		} else if len(b(3)) != 0 {
-			if len(key) == 0 {
-				return bytes.TrimPrefix(b(3), []byte{'|'})
-			}
-			return regex.JoinBytes(key, `="`, bytes.TrimPrefix(b(3), []byte{'|'}), '"')
 		}
 
 		return b(0)
 	})
 
-	*buf = regex.Comp(`(?s){:([\w_\-]+)((?:\s+[\w_\-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[\w_\-]+)|))+|)\s*(?:\{(.*?)\}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
-		if plugin, ok := plugins.Get(string(b(1)), true); ok {
-			args := map[string]string{}
-			ind := 0
-			regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(b(2), func(b func(int) []byte) []byte {
-				if len(b(2)) == 0 {
-					args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
-					ind++
-				} else {
-					args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
-				}
-				return nil
-			})
+	*buf = regex.Comp(`{%([^{}%]+)%}`).RepFunc(*buf, func(b func(int) []byte) []byte {
+		if dec, err := compress.UnZip(b(1)); err == nil {
+			data := regex.Comp(`^([?!:#=]?)(\$?)([\w_\-]+)\s*([^\r\n]*)$`).Split(dec)
 
-			out, err := plugin.Run(args, bytes.TrimSpace(b(3)), true)
-
-			if err != nil {
-				PrintMsg("warn", "Warning: Plugin Error!")
-				fmt.Println("  plugin:", string(b(1)))
-				fmt.Println(err)
-				return b(0)
+			var t byte
+			if len(data[1]) != 0 {
+				t = data[1][0]
 			}
+			d := len(data[2]) != 0
+			name := data[3]
+			atts := data[4]
 
-			return out
+			switch t {
+			case '?', '!':
+				// no content in this encoding
+				return nil
+			case ':':
+				if d {
+					break
+				}
+
+				if plugin, ok := plugins.Get(string(name)); ok {
+					args := map[string]string{}
+					ind := 0
+					regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
+						if len(b(2)) == 0 {
+							args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
+							ind++
+						} else {
+							args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
+						}
+						return nil
+					})
+
+					out, err := plugin.Run(args, nil, true)
+					if err != nil {
+						PrintMsg("warn", "Warning: Plugin Error!")
+						fmt.Println("  plugin:", string(b(1)))
+						fmt.Println(err)
+						break
+					}
+
+					return out
+				}
+			case '#':
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return []byte(val)
+					}
+				}
+
+				if d {
+					break
+				}
+
+				if val, ok := vars[string(name)]; ok && val != "" {
+					return []byte(val)
+				}
+			case '=':
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return goutil.HTML.EscapeArgs([]byte(val))
+					}
+				}
+
+				if d {
+					break
+				}
+
+				if val, ok := vars[string(name)]; ok && val != "" {
+					return goutil.HTML.EscapeArgs([]byte(val))
+				}
+			default:
+				if len(atts) != 0 && atts[0] == '=' {
+					if ymlVars != nil && len(ymlVars) != 0 {
+						if val, ok := ymlVars[string(bytes.Trim(atts[1:], "\"' \t"))]; ok && val != "" {
+							return regex.JoinBytes(name, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
+						}
+					}
+
+					if d {
+						break
+					}
+
+					if val, ok := vars[string(bytes.Trim(atts[1:], "\"' \t"))]; ok && val != "" {
+						return regex.JoinBytes(name, `="`, goutil.HTML.EscapeArgs([]byte(val), '"'), '"')
+					}
+
+					break
+				}
+
+				if ymlVars != nil && len(ymlVars) != 0 {
+					if val, ok := ymlVars[string(name)]; ok && val != "" {
+						return goutil.HTML.Escape([]byte(val))
+					}
+				}
+
+				if d {
+					break
+				}
+
+				if val, ok := vars[string(name)]; ok && val != "" {
+					return goutil.HTML.Escape([]byte(val))
+				}
+			}
 		}
 
 		return b(0)
@@ -581,25 +548,10 @@ func compVars(buf *[]byte, vars map[string]string, ymlVars map[string]string) {
 }
 
 func getPageBuf(root string, path string, domains []string) ([]byte, map[string]string, error) {
-	var ymlVars map[string]string
-
-	buf, err := os.ReadFile(path + ".html")
-	if err == nil {
-		ymlVars = getPageYml(&buf, path+".html")
-	} else if buf, err = os.ReadFile(path + ".md"); err == nil {
-		ymlVars = getPageYml(&buf, path+".md")
-		Markdown(&buf, domains)
-	}
-
+	buf, ymlVars, err := ReadFileHTML(path, domains)
 	if err != nil {
 		dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
-		buf, err = os.ReadFile(dPath + ".html")
-		if err == nil {
-			ymlVars = getPageYml(&buf, dPath+".html")
-		} else if buf, err = os.ReadFile(dPath + ".md"); err == nil {
-			ymlVars = getPageYml(&buf, dPath+".md")
-			Markdown(&buf, domains)
-		}
+		buf, ymlVars, err = ReadFileHTML(dPath, domains)
 	}
 
 	for err != nil {
@@ -610,23 +562,10 @@ func getPageBuf(root string, path string, domains []string) ([]byte, map[string]
 			return []byte{}, map[string]string{}, os.ErrNotExist
 		}
 
-		buf, err = os.ReadFile(path + ".html")
-		if err == nil {
-			ymlVars = getPageYml(&buf, path+".html")
-		} else if buf, err = os.ReadFile(path + ".md"); err == nil {
-			ymlVars = getPageYml(&buf, path+".md")
-			Markdown(&buf, domains)
-		}
-
+		buf, ymlVars, err = ReadFileHTML(path, domains)
 		if err != nil {
 			dPath := regex.Comp(`\/([^\/]+)$`).RepStr(path, "/@$1")
-			buf, err = os.ReadFile(dPath + ".html")
-			if err == nil {
-				ymlVars = getPageYml(&buf, dPath+".html")
-			} else if buf, err = os.ReadFile(dPath + ".md"); err == nil {
-				ymlVars = getPageYml(&buf, dPath+".md")
-				Markdown(&buf, domains)
-			}
+			buf, ymlVars, err = ReadFileHTML(dPath, domains)
 		}
 	}
 
