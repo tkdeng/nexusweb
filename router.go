@@ -122,6 +122,7 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 
 	rcb.mu.Lock()
 	*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
+		//todo: verify url path
 		//todo: handle :var1, :var2? values from paths[1:]
 		return cb(c)
 	})
