@@ -1,11 +1,15 @@
 <!doctype html><html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,minimum-scale=1">
-
-<link rel="manifest" href="/manifest.json">
-<meta name="description" content="">
-<title>Web Server</title>
+<meta name="viewport" content="{=viewport|width=device-width,height=device-height,initial-scale=1,minimum-scale=1}">
+{?icon{
+<link rel="icon" href="{=icon}">
+<link rel="shortcut" href="{=icon}">
+<link rel="apple-touch-icon" href="{=icon}">
+}}
+<link rel="manifest" href="{=manifest|/manifest.json}">
+{?desc{<meta name="description" content="{=$desc}">}}
+{?title{<title>{$title}</title>}}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/script.js"></script>
@@ -13,7 +17,7 @@
 </head>
 <body>
 <p><header>
-  <a class="site-title" href="/"></a>
+  <a class="site-title" href="/">{app}</a>
   <ul>
     <li><a href="/">Home</a></li>
     <li><a href="/about">About</a></li>
@@ -22,10 +26,19 @@
 </header>
 </p>
 <h2 id="hello-world">Hello, World</h2>
-<p>example value</p>
+<p>{myvar}</p>
 <p><h2>Widget</h2>
 <p>{:lorem-d}</p>
 </p>
+<div class="{=class}" {arg="arg1"}></div>
+<p>{arg2}</p>
+<p>{$arg3}</p>
+<p>{?arg4 {test4}}</p>
+<p>{!arg5 {test5</p>
+<p>{myvar}}}</p>
+<p>{#html}</p>
+<p>{:plug1 arg="arg1" arg2 {content}}</p>
+<p>{:plug2 arg="arg1" arg2}</p>
 
 </body>
 </html>
