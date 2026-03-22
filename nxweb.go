@@ -16,12 +16,10 @@ import (
 )
 
 type App struct {
-	*Router
-
 	mux    *http.ServeMux
 	Config Config
 
-	// router *Router
+	router *Router
 }
 
 type Config struct {
@@ -117,17 +115,13 @@ func New(root string, config ...Config) (*App, error) {
 	app := &App{
 		mux:    mux,
 		Config: config[0],
-		/* router: &Router{
+		router: &Router{
 			path:   "/",
 			routes: goutil.NewMap[string, *Router](),
 			// cb:     []func(c *Ctx) error{},
 			cb: goutil.NewMap[string, *routeCB](),
-		}, */
+		},
 	}
-
-	app.path = "/"
-	app.routes = goutil.NewMap[string, *Router]()
-	app.cb =  goutil.NewMap[string, *routeCB]()
 
 	app.router.app = app
 
