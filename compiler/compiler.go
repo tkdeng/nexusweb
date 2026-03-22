@@ -162,10 +162,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	compVars(&layoutBuf, vars, nil)
 	CompressHTML(&layoutBuf, debugMode)
 
-	//todo: embed {@head} and others for layout before writing file to dist
-	compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars)
-
-	if err = WriteFileHTML(root+"/dist/#layout", layoutBuf); err != nil {
+	if err = WriteFileHTML(root+"/dist/#layout", compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars)); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
 		fmt.Println(err)
 	}
@@ -199,7 +196,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 					CompressHTML(&buf, debugMode)
 
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					WriteFileHTML(root+"/dist/"+fileName, buf)
+					WriteFileHTML(root+"/dist/"+fileName, compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains, vars))
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, debugMode); err != nil {
@@ -254,7 +251,7 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 					compVars(&buf, vars, ymlVars)
 					CompressHTML(&buf, debugMode)
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					WriteFileHTML(distPath+"/"+fileName, buf)
+					WriteFileHTML(distPath+"/"+fileName, compLayoutEmbed(root+"/pages", path, path+"/"+fileName, buf, domains, vars))
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, debugMode); err != nil {
