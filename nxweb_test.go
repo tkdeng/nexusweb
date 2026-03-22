@@ -16,12 +16,12 @@ func Test(t *testing.T) {
 		PublicURI: "/public",
 	})
 
-	app.router.Use("/test/:var1/:var2", func(c *Ctx) error {
+	app.Use("/test/:var1/:var2", func(c *Ctx) error {
 		fmt.Println("--- r1 ^ ---")
 		return c.Next()
 	})
 
-	app.router.Use("/test/:var1/:var2", func(c *Ctx) error {
+	app.Use("/test/:var1/:var2", func(c *Ctx) error {
 		fmt.Println("--- r2 ^ ---")
 		return nil
 	})

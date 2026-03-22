@@ -10,7 +10,10 @@ import (
 )
 
 type Router struct {
-	app  *App
+	mux    *http.ServeMux
+	Config Config
+
+	// app  *App
 	path string
 
 	routes *goutil.SyncMap[string, *Router]
@@ -40,7 +43,7 @@ func (router *Router) newRouter(path string) *Router {
 		childRouter = r
 	} else {
 		childRouter = &Router{
-			app:    router.app,
+			// app:    router.app,
 			path:   path,
 			routes: goutil.NewMap[string, *Router](),
 			// cb:     []func(c *Ctx) error{},
@@ -76,7 +79,7 @@ func (router *Router) newRouter(path string) *Router {
 		}
 
 		router.routes.Set(path, childRouter)
-		router.app.mux.HandleFunc(path, childRouter.handler)
+		router.mux.HandleFunc(path, childRouter.handler)
 	}
 	router.mu.Unlock()
 

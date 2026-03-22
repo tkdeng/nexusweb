@@ -16,10 +16,7 @@ import (
 )
 
 type App struct {
-	mux    *http.ServeMux
-	Config Config
-
-	router *Router
+	Router
 }
 
 type Config struct {
@@ -113,17 +110,14 @@ func New(root string, config ...Config) (*App, error) {
 	})
 
 	app := &App{
-		mux:    mux,
-		Config: config[0],
-		router: &Router{
-			path:   "/",
+		Router{
+			mux:    mux,
+			Config: config[0],
+			path:   "",
 			routes: goutil.NewMap[string, *Router](),
-			// cb:     []func(c *Ctx) error{},
-			cb: goutil.NewMap[string, *routeCB](),
+			cb:     goutil.NewMap[string, *routeCB](),
 		},
 	}
-
-	app.router.app = app
 
 	if config[0].PublicURI != "" && config[0].PublicURI != "/" {
 		uri := config[0].PublicURI
@@ -137,9 +131,9 @@ func New(root string, config ...Config) (*App, error) {
 		mux.Handle(uri, http.StripPrefix(uri, http.FileServer(http.Dir(root+"/public"))))
 	}
 
-	app.router.handler = func(w http.ResponseWriter, r *http.Request) {
+	app.handler = func(w http.ResponseWriter, r *http.Request) {
 		// get request context (also verifies headers)
-		ctx, err := app.router.newCtx(w, r)
+		ctx, err := app.newCtx(w, r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad Request!"))
@@ -171,7 +165,7 @@ func New(root string, config ...Config) (*App, error) {
 
 		// handle route callbacks
 		if cPath := ctx.Path; cPath != "/" {
-			rcb, ok := app.router.cb.Get(cPath)
+			rcb, ok := app.cb.Get(cPath)
 			ctx.next = true
 			if ok {
 				rcb.run(&ctx)
@@ -182,7 +176,7 @@ func New(root string, config ...Config) (*App, error) {
 				if cPath == "/" {
 					break
 				}
-				if rcb, ok = app.router.cb.Get(cPath); ok {
+				if rcb, ok = app.cb.Get(cPath); ok {
 					rcb.run(&ctx)
 				}
 			}
@@ -210,7 +204,7 @@ func New(root string, config ...Config) (*App, error) {
 		}
 	}
 
-	mux.HandleFunc("/", app.router.handler)
+	mux.HandleFunc("/", app.handler)
 
 	return app, nil
 }

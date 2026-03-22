@@ -64,7 +64,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	// lPath := regex.Comp(`\/@([\w_\-\.]+)$`).RepLitStr(path, "/#layout.html")
 	lPath := filepath.Join(filepath.Dir(path), "/#layout.html")
 
-	lFilePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath)
+	lFilePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", lPath)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 			break
 		}
 
-		if lFilePath, err = goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath); err != nil {
+		if lFilePath, err = goutil.JoinPath(ctx.router.Config.Root, "dist", lPath); err != nil {
 			return nil, err
 		}
 
@@ -107,7 +107,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		path = strings.TrimSuffix(path, ".html")
 	}
 
-	filePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", path)
+	filePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", path)
 	if err != nil {
 		return err
 	}
@@ -141,15 +141,15 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	}
 
 	varList := map[string]string{
-		"title":    goutil.Clean(ctx.router.app.Config.Title),
-		"apptitle": goutil.Clean(ctx.router.app.Config.AppTitle),
-		"desc":     goutil.Clean(ctx.router.app.Config.Desc),
-		"icon":     goutil.Clean(ctx.router.app.Config.Icon),
-		"public":   goutil.Clean(ctx.router.app.Config.PublicURI),
-		"debug":    goutil.ToType[string](ctx.router.app.Config.DebugMode),
+		"title":    goutil.Clean(ctx.router.Config.Title),
+		"apptitle": goutil.Clean(ctx.router.Config.AppTitle),
+		"desc":     goutil.Clean(ctx.router.Config.Desc),
+		"icon":     goutil.Clean(ctx.router.Config.Icon),
+		"public":   goutil.Clean(ctx.router.Config.PublicURI),
+		"debug":    goutil.ToType[string](ctx.router.Config.DebugMode),
 	}
 
-	for k, v := range ctx.router.app.Config.Vars {
+	for k, v := range ctx.router.Config.Vars {
 		varList[k] = goutil.Clean(v)
 	}
 
@@ -163,7 +163,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		}
 	}
 
-	if err = compiler.Render(&buf, ctx.router.app.Config.Root, filePath, varList, isWidget); err != nil {
+	if err = compiler.Render(&buf, ctx.router.Config.Root, filePath, varList, isWidget); err != nil {
 		return err
 	}
 
