@@ -126,7 +126,6 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	}
 
 	if isWidget {
-		//todo: optimize performance for ctx.getLayout method
 		if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
 			// buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
 			buf = bytes.ReplaceAll(lBuf, []byte("{@body}"), buf)
