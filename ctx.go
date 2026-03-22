@@ -19,16 +19,19 @@ type Ctx struct {
 	w      http.ResponseWriter
 	r      *http.Request
 
+	next bool
+	rendered bool
+
 	Host string
 	Port string
 	Path string
 	IP   string
 }
 
-func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, error) {
+func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error) {
 	host, port, err := net.SplitHostPort(r.Host)
 	if err != nil {
-		return nil, err
+		return Ctx{}, err
 	}
 
 	// get ip address or remote host
@@ -38,10 +41,10 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, erro
 	}
 
 	if remoteIP == "" {
-		return nil, fmt.Errorf("unable to detect remote ip address")
+		return Ctx{}, fmt.Errorf("unable to detect remote ip address")
 	}
 
-	return &Ctx{
+	return Ctx{
 		router: router,
 		w:      w,
 		r:      r,
@@ -88,6 +91,11 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	}
 
 	return lbuf, nil
+}
+
+func (ctx *Ctx) Next() error {
+	ctx.next = true
+	return nil
 }
 
 func (ctx *Ctx) Render(path string, vars ...Map) error {

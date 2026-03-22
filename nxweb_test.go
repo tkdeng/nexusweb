@@ -1,6 +1,7 @@
 package nxweb
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -13,6 +14,16 @@ func Test(t *testing.T) {
 		},
 		AssetsURI: "/assets",
 		PublicURI: "/public",
+	})
+
+	app.router.Use("/test/:var1/:var2", func(c *Ctx) error {
+		fmt.Println("--- r1 ^ ---")
+		return c.Next()
+	})
+
+	app.router.Use("/test/:var1/:var2", func(c *Ctx) error {
+		fmt.Println("--- r2 ^ ---")
+		return nil
 	})
 
 	if err != nil {

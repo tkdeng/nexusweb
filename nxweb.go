@@ -16,10 +16,12 @@ import (
 )
 
 type App struct {
+	*Router
+
 	mux    *http.ServeMux
 	Config Config
 
-	router *Router
+	// router *Router
 }
 
 type Config struct {
@@ -115,12 +117,17 @@ func New(root string, config ...Config) (*App, error) {
 	app := &App{
 		mux:    mux,
 		Config: config[0],
-		router: &Router{
+		/* router: &Router{
 			path:   "/",
 			routes: goutil.NewMap[string, *Router](),
-			cb:     []func(c *Ctx) error{},
-		},
+			// cb:     []func(c *Ctx) error{},
+			cb: goutil.NewMap[string, *routeCB](),
+		}, */
 	}
+
+	app.path = "/"
+	app.routes = goutil.NewMap[string, *Router]()
+	app.cb =  goutil.NewMap[string, *routeCB]()
 
 	app.router.app = app
 
@@ -137,6 +144,7 @@ func New(root string, config ...Config) (*App, error) {
 	}
 
 	app.router.handler = func(w http.ResponseWriter, r *http.Request) {
+		// get request context (also verifies headers)
 		ctx, err := app.router.newCtx(w, r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -157,6 +165,7 @@ func New(root string, config ...Config) (*App, error) {
 		// may auto minify assets, and update compiler code to use .min files
 		// or might let serveses like cloudflare handle .min files
 
+		// handle static assets
 		if strings.HasPrefix(ctx.Path, config[0].AssetsURI) {
 			if path, err := goutil.JoinPath(root, "assets", strings.Replace(ctx.Path, config[0].AssetsURI, "", 1)); err == nil {
 				if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
@@ -166,6 +175,30 @@ func New(root string, config ...Config) (*App, error) {
 			}
 		}
 
+		// handle route callbacks
+		if cPath := ctx.Path; cPath != "/" {
+			rcb, ok := app.router.cb.Get(cPath)
+			ctx.next = true
+			if ok {
+				rcb.run(&ctx)
+			}
+
+			for ctx.next {
+				cPath = filepath.Dir(cPath)
+				if cPath == "/" {
+					break
+				}
+				if rcb, ok = app.router.cb.Get(cPath); ok {
+					rcb.run(&ctx)
+				}
+			}
+
+			if ctx.rendered {
+				return
+			}
+		}
+
+		// handle static pages
 		if ctx.Path == "/" || ctx.Path == "" || regex.Comp(`\/[\w_\-]+\/?$`).MatchStr(ctx.Path) {
 			if err = ctx.Render(ctx.Path); err != nil {
 				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
@@ -173,10 +206,10 @@ func New(root string, config ...Config) (*App, error) {
 					w.Write([]byte("Internal Server Error!"))
 				}
 			}
-
 			return
 		}
 
+		// catch 404 error
 		if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal Server Error!"))
