@@ -128,10 +128,6 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 	rcb.mu.Unlock()
 }
 
-/* func (app *App) Use(path string, cb func(c *Ctx) error){
-	app.router.Use(path, cb)
-} */
-
 func (rcb *routeCB) run(ctx *Ctx) {
 	rcb.mu.RLock()
 	ctx.next = true
