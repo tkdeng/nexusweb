@@ -55,6 +55,8 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, erro
 }
 
 func (ctx *Ctx) getLayout(path string) ([]byte, error) {
+	// fmt.Println(path, filepath.Base(path))
+
 	if !regex.Comp(`\/@([\w_\-\.]+)$`).MatchStr(path) {
 		return nil, fmt.Errorf("layout not found")
 	}

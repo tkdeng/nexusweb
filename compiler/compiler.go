@@ -48,14 +48,14 @@ func ReadFileHTML(name string, domains []string) ([]byte, map[string]string, err
 	var isMD bool
 
 	if strings.HasSuffix(name, ".html") {
-		buf, err = os.ReadFile(name + ".html")
+		buf, err = os.ReadFile(name)
 
 		if err != nil {
 			return []byte{}, map[string]string{}, err
 		}
 	} else if strings.HasSuffix(name, ".md") {
 		isMD = true
-		buf, err = os.ReadFile(name + ".md")
+		buf, err = os.ReadFile(name)
 
 		if err != nil {
 			return []byte{}, map[string]string{}, err
@@ -161,6 +161,10 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 
 	compVars(&layoutBuf, vars, nil)
 	CompressHTML(&layoutBuf, debugMode)
+
+	//todo: embed {@head} and others for layout before writing file to dist
+	compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars)
+
 	if err = WriteFileHTML(root+"/dist/#layout", layoutBuf); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
 		fmt.Println(err)
@@ -297,6 +301,15 @@ func compEmbed(root string, path string, oPath string, buf []byte, domains []str
 	})
 
 	return buf, ymlVars
+}
+
+func compLayoutEmbed(root string, path string, oPath string, buf []byte, domains []string, vars map[string]string) []byte {
+	buf, ymlVars := compEmbed(root, path, oPath, buf, domains)
+	compVars(&buf, vars, ymlVars)
+
+	fmt.Println()
+
+	return buf
 }
 
 func compVars(buf *[]byte, vars map[string]string, ymlVars map[string]string) {
