@@ -12,7 +12,6 @@ import (
 
 	"github.com/tkdeng/goutil"
 	"github.com/tkdeng/nexusweb/compiler"
-	"github.com/tkdeng/regex"
 )
 
 type Ctx struct {
@@ -55,13 +54,12 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (*Ctx, erro
 }
 
 func (ctx *Ctx) getLayout(path string) ([]byte, error) {
-	// fmt.Println(path, filepath.Base(path))
-
-	if !regex.Comp(`\/@([\w_\-\.]+)$`).MatchStr(path) {
+	if filepath.Base(path)[0] != '@' {
 		return nil, fmt.Errorf("layout not found")
 	}
 
-	lPath := regex.Comp(`\/@([\w_\-\.]+)$`).RepLitStr(path, "/#layout.html")
+	// lPath := regex.Comp(`\/@([\w_\-\.]+)$`).RepLitStr(path, "/#layout.html")
+	lPath := filepath.Join(filepath.Dir(path), "/#layout.html")
 
 	lFilePath, err := goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath)
 	if err != nil {
@@ -69,8 +67,14 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	}
 
 	lbuf, err := os.ReadFile(lFilePath)
-	for err != nil && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).MatchStr(lPath) {
-		lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
+	for err != nil /* && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).MatchStr(lPath) */ {
+		cPath := lPath
+		// lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
+		lPath = filepath.Join(filepath.Dir(filepath.Dir(lPath)), filepath.Base(lPath))
+
+		if cPath == lPath {
+			break
+		}
 
 		if lFilePath, err = goutil.JoinPath(ctx.router.app.Config.Root, "dist", lPath); err != nil {
 			return nil, err
