@@ -304,10 +304,12 @@ func compEmbed(root string, path string, oPath string, buf []byte, domains []str
 }
 
 func compLayoutEmbed(root string, path string, oPath string, buf []byte, domains []string, vars map[string]string) []byte {
+	buf = bytes.ReplaceAll(buf, []byte("{@body}"), []byte("{!@body!}"))
+
 	buf, ymlVars := compEmbed(root, path, oPath, buf, domains)
 	compVars(&buf, vars, ymlVars)
 
-	fmt.Println()
+	buf = bytes.ReplaceAll(buf, []byte("{!@body!}"), []byte("{@body}"))
 
 	return buf
 }
