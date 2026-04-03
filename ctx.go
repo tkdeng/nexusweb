@@ -156,7 +156,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	return nil
 }
 
-/* func (ctx *Ctx) RenderOld(path string, vars ...Map) error {
+/* func (ctx *Ctx) Render(path string, vars ...Map) error {
 	filePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", path)
 	if err != nil {
 		return err

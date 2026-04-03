@@ -25,6 +25,8 @@ func Render(path string, vars map[string]string, isWidget bool) ([]byte, error) 
 	if seg, ok := PageBuf.Get(path); ok {
 		buf := renderSegHTML(seg, vars)
 
+		//todo: may consider dynamic layout embeds for regular pages to simplify live compiler
+
 		if isWidget {
 			lPath := filepath.Join(filepath.Dir(path), "/#layout")
 
