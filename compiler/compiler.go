@@ -93,7 +93,122 @@ func WriteFileHTML(name string, data []byte) error {
 	name = strings.TrimSuffix(name, ".md")
 
 	decodeVars(&data)
+
+	/* seg := compSegHTML(&data)
+	PageBuf.Set(name, seg) */
+
 	return os.WriteFile(name+".html", data, 0755)
+}
+
+func compSegHTML(buf *[]byte) []SegHTML {
+	varSeg := []SegHTML{}
+
+	*buf = regex.Comp(`(?s){([?!:#=]?)\s*\$?([\w_\-]+)\s*([^\r\n]*?)\s*(?:{%(.*?)%}|)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
+		var t byte
+		if len(b(1)) != 0 {
+			t = b(1)[0]
+		}
+		name := b(2)
+		atts := b(3)
+		cont := b(4)
+
+		switch t {
+		case '?', '!':
+			if len(cont) != 0 {
+				s := compSegHTML(&cont)
+
+				varSeg = append(varSeg, SegHTML{
+					t:    t,
+					name: string(name),
+					seg:  s,
+				})
+
+				return []byte("{%SPLIT%}")
+			}
+		case ':':
+			if _, ok := plugins.Get(string(name)); ok {
+				args := map[string]string{}
+				ind := 0
+				regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
+					if len(b(2)) == 0 {
+						args[strconv.Itoa(ind)] = string(goutil.Clean(b(1)))
+						ind++
+					} else {
+						args[string(goutil.Clean(b(1)))] = string(goutil.Clean(b(3)))
+					}
+					return nil
+				})
+
+				var s []SegHTML
+				if len(cont) != 0 {
+					s = compSegHTML(&cont)
+				}
+
+				varSeg = append(varSeg, SegHTML{
+					t:    t,
+					name: string(name),
+					args: args,
+					seg:  s,
+				})
+
+				return []byte("{%SPLIT%}")
+			}
+		case '#', '=':
+			var def []byte
+			if len(atts) != 0 && atts[0] == '|' {
+				def = atts[1:]
+			}
+
+			varSeg = append(varSeg, SegHTML{
+				t:    t,
+				name: string(name),
+				body: def,
+			})
+
+			return []byte("{%SPLIT%}")
+		default:
+			if len(atts) != 0 && atts[0] == '=' {
+				varSeg = append(varSeg, SegHTML{
+					t:    '=',
+					name: string(bytes.Trim(atts[1:], "\"' \t")),
+				})
+
+				return []byte("{%SPLIT%}")
+			}
+
+			var def []byte
+			if len(atts) != 0 && atts[0] == '|' {
+				def = atts[1:]
+			}
+
+			varSeg = append(varSeg, SegHTML{
+				t:    ' ',
+				name: string(name),
+				body: def,
+			})
+
+			return []byte("{%SPLIT%}")
+		}
+
+		return nil
+	})
+
+	bufSeg := bytes.Split(*buf, []byte("{%SPLIT%}"))
+
+	seg := make([]SegHTML, len(varSeg)+len(bufSeg))
+
+	for i := 0; i < len(bufSeg)-1; i++ {
+		seg = append(seg, SegHTML{
+			t:    0,
+			body: bufSeg[i],
+		}, varSeg[i])
+	}
+	seg = append(seg, SegHTML{
+		t:    0,
+		body: bufSeg[len(bufSeg)-1],
+	})
+
+	return seg
 }
 
 func CompressHTML(buf *[]byte, debugMode bool) {

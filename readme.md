@@ -41,14 +41,14 @@ func main(){
 
 ## HTML
 
-Files starting with `#` such as `#layout.html` are primarelly for layouts. These files will have vars precompiled, but keep embeds dynamic.
+Files starting with `#` such as `#layout.html` are for layouts.
 
-Files starting with `@` such as `@widget.html` or `@error.html` are primarelly for widgets, errors, and dynamic content. These will keep vars and embeds dynamic.
+Files starting with `@` such as `@widget.html` or `@error.html` are for widgets, errors, apis, and dynamic content.
 
 Regular files such as `body.html`, `head.html`, `custom.html` are files that can be
 embedded, starting with the layout as the entry point. Your `#layout.html` file should include a `{@body}` and optionally `{@head}` embed, to embed the relative files. These files (`body.html`, etc) can optionally embed more files, such as `{@custom}` for example.
 
-You can also embed `@widget.html` files directly, and there content and variables will remain dynamic, even while the content and variables of static files remain static.
+You can also embed `@widget.html` files directly.
 
 If your `body.html` file in a higher directory/page (`about/body.html`, etc) is missing other files such as `head.html` or `custom.html` that its trying to embed, it will automatically inherit the parent files for those embeds.
 

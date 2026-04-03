@@ -203,7 +203,7 @@ func (ctx *Ctx) Error(path string, status int, msg string) error {
 	}
 
 	if err != nil {
-		err = ctx.Render("/@error", Map{
+		err = ctx.Render("@error", Map{
 			"status": strconv.Itoa(status),
 			"msg":    msg,
 		})

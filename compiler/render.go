@@ -13,8 +13,29 @@ import (
 	"github.com/tkdeng/regex"
 )
 
+type SegHTML struct {
+	t    byte
+	name string
+	args map[string]string
+	body []byte
+	seg  []SegHTML
+}
+
+var PageBuf *goutil.SyncMap[string, []SegHTML] = goutil.NewMap[string, []SegHTML]()
+
 func Render(buf *[]byte, root string, path string, vars map[string]string, isWidget bool) error {
+	/* name := strings.TrimSuffix(path, ".html")
+	name = strings.TrimSuffix(name, ".md")
+
+	if seg, ok := PageBuf.Get(name); ok {
+		*buf = renderSegHTML(seg, vars)
+	}
+	return nil */
+
 	//todo: optimize performance (may eventually try to merge with go templ)
+
+	//todo: may find out why im not just compiling @widgets the same way Im compiling regular pages
+	// may need to check readme file just in case its for a reason
 
 	if isWidget {
 		*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
@@ -125,4 +146,44 @@ func Render(buf *[]byte, root string, path string, vars map[string]string, isWid
 	})
 
 	return nil
+}
+
+func renderSegHTML(seg []SegHTML, vars map[string]string) []byte {
+	buf := []byte{}
+
+	for _, s := range seg {
+		switch s.t {
+		case '?', '!':
+			val, ok := vars[string(s.name)]
+			if !((s.t == '?' && (!ok || val == "")) || (s.t == '!' && (ok && val != ""))) {
+				buf = append(buf, renderSegHTML(s.seg, vars)...)
+			}
+		case ':':
+			if plugin, ok := plugins.Get(s.name); ok {
+				out, err := plugin.Run(s.args, bytes.TrimSpace(renderSegHTML(s.seg, vars)), false)
+				if err != nil {
+					PrintMsg("warn", "Warning: Plugin Error!")
+					fmt.Println("  plugin:", s.name)
+					fmt.Println(err)
+				} else {
+					buf = append(buf, out...)
+				}
+			}
+		case '#', '=', ' ':
+			if val, ok := vars[string(s.name)]; ok && val != "" {
+				if s.t == '=' {
+					val = string(goutil.HTML.EscapeArgs([]byte(val)))
+				} else if s.t == ' ' {
+					val = string(goutil.HTML.Escape([]byte(val)))
+				}
+				buf = append(buf, []byte(val)...)
+			} else {
+				buf = append(buf, s.body...)
+			}
+		default:
+			buf = append(buf, s.body...)
+		}
+	}
+
+	return buf
 }
