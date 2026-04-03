@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/tkdeng/goutil"
+	"github.com/tkdeng/nexusweb/compress"
 	"github.com/tkdeng/nexusweb/plugins"
-	"github.com/tkdeng/regex"
 )
 
 type SegHTML struct {
@@ -23,20 +21,38 @@ type SegHTML struct {
 
 var PageBuf *goutil.SyncMap[string, []SegHTML] = goutil.NewMap[string, []SegHTML]()
 
-func Render(buf *[]byte, root string, path string, vars map[string]string, isWidget bool) error {
-	/* name := strings.TrimSuffix(path, ".html")
-	name = strings.TrimSuffix(name, ".md")
+func Render(path string, vars map[string]string, isWidget bool) ([]byte, error) {
+	if seg, ok := PageBuf.Get(path); ok {
+		buf := renderSegHTML(seg, vars)
 
-	if seg, ok := PageBuf.Get(name); ok {
-		*buf = renderSegHTML(seg, vars)
+		if isWidget {
+			lPath := filepath.Join(filepath.Dir(path), "/#layout")
+
+			seg, ok := PageBuf.Get(lPath)
+			for !ok {
+				cPath := lPath
+				lPath = filepath.Join(filepath.Dir(filepath.Dir(lPath)), "/#layout")
+
+				if cPath == lPath {
+					break
+				}
+
+				seg, ok = PageBuf.Get(lPath)
+			}
+
+			if ok {
+				lBuf := renderSegHTML(seg, vars)
+				buf = bytes.ReplaceAll(lBuf, []byte("{@body}"), buf)
+			}
+		}
+
+		return buf, nil
 	}
-	return nil */
 
-	//todo: optimize performance (may eventually try to merge with go templ)
+	return nil, os.ErrNotExist
+}
 
-	//todo: may find out why im not just compiling @widgets the same way Im compiling regular pages
-	// may need to check readme file just in case its for a reason
-
+/* func Render(buf *[]byte, root string, path string, vars map[string]string, isWidget bool) error {
 	if isWidget {
 		*buf = regex.Comp(`{@([\w_\-]+)}`).RepFunc(*buf, func(b func(int) []byte) []byte {
 			ePath, err := goutil.JoinPath(filepath.Dir(path), string(b(1)))
@@ -79,7 +95,7 @@ func Render(buf *[]byte, root string, path string, vars map[string]string, isWid
 			val, ok := vars[string(name)]
 			if !((t == '?' && (!ok || val == "")) || (t == '!' && (ok && val != ""))) {
 				if len(cont) != 0 {
-					if err := Render(&cont, root, path, vars, false); err == nil {
+					if err := RenderOld(&cont, root, path, vars, false); err == nil {
 						return cont
 					}
 					return []byte{}
@@ -100,7 +116,7 @@ func Render(buf *[]byte, root string, path string, vars map[string]string, isWid
 				})
 
 				if len(cont) != 0 {
-					if err := Render(&cont, root, path, vars, false); err != nil {
+					if err := RenderOld(&cont, root, path, vars, false); err != nil {
 						cont = []byte{}
 					}
 				}
@@ -146,7 +162,7 @@ func Render(buf *[]byte, root string, path string, vars map[string]string, isWid
 	})
 
 	return nil
-}
+} */
 
 func renderSegHTML(seg []SegHTML, vars map[string]string) []byte {
 	buf := []byte{}
@@ -170,7 +186,7 @@ func renderSegHTML(seg []SegHTML, vars map[string]string) []byte {
 				}
 			}
 		case '#', '=', ' ':
-			if val, ok := vars[string(s.name)]; ok && val != "" {
+			if val, ok := vars[s.name]; ok && val != "" {
 				if s.t == '=' {
 					val = string(goutil.HTML.EscapeArgs([]byte(val)))
 				} else if s.t == ' ' {
@@ -181,7 +197,11 @@ func renderSegHTML(seg []SegHTML, vars map[string]string) []byte {
 				buf = append(buf, s.body...)
 			}
 		default:
-			buf = append(buf, s.body...)
+			if dec, err := compress.UnZip(s.body); err == nil {
+				buf = append(buf, dec...)
+			} else {
+				buf = append(buf, s.body...)
+			}
 		}
 	}
 

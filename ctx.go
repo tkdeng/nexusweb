@@ -1,11 +1,9 @@
 package nxweb
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,7 +17,7 @@ type Ctx struct {
 	w      http.ResponseWriter
 	r      *http.Request
 
-	next bool
+	next     bool
 	rendered bool
 
 	Host string
@@ -56,7 +54,7 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 	}, nil
 }
 
-func (ctx *Ctx) getLayout(path string) ([]byte, error) {
+/* func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	if filepath.Base(path)[0] != '@' {
 		return nil, fmt.Errorf("layout not found")
 	}
@@ -70,7 +68,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	}
 
 	lbuf, err := os.ReadFile(lFilePath)
-	for err != nil /* && regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).MatchStr(lPath) */ {
+	for err != nil {
 		cPath := lPath
 		// lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
 		lPath = filepath.Join(filepath.Dir(filepath.Dir(lPath)), filepath.Base(lPath))
@@ -91,7 +89,7 @@ func (ctx *Ctx) getLayout(path string) ([]byte, error) {
 	}
 
 	return lbuf, nil
-}
+} */
 
 func (ctx *Ctx) Next() error {
 	ctx.next = true
@@ -100,13 +98,65 @@ func (ctx *Ctx) Next() error {
 
 func (ctx *Ctx) Render(path string, vars ...Map) error {
 	if path == "/" || path == "" {
-		path = "index"
+		path = "/index"
 	} else if path[0] != '/' {
-		path = "/" + strings.TrimSuffix(path, ".html")
+		path = "/" + strings.TrimSuffix(strings.TrimSuffix(path, ".html"), ".md")
 	} else {
-		path = strings.TrimSuffix(path, ".html")
+		path = strings.TrimSuffix(strings.TrimSuffix(path, ".html"), ".md")
+	}
+	path = strings.TrimRight(path, "/")
+
+	isWidget := false
+	if filename := filepath.Base(path); len(filename) != 0 && (filename[0] == '@' || filename != "index") {
+		if filename[0] == '@' {
+			isWidget = true
+		} else {
+			path += "/index"
+		}
 	}
 
+	varList := map[string]string{
+		"title":    goutil.Clean(ctx.router.Config.Title),
+		"apptitle": goutil.Clean(ctx.router.Config.AppTitle),
+		"desc":     goutil.Clean(ctx.router.Config.Desc),
+		"icon":     goutil.Clean(ctx.router.Config.Icon),
+		"public":   goutil.Clean(ctx.router.Config.PublicURI),
+		"debug":    goutil.ToType[string](ctx.router.Config.DebugMode),
+	}
+
+	for k, v := range ctx.router.Config.Vars {
+		varList[k] = goutil.Clean(v)
+	}
+
+	//todo: set other dynamic vars
+	// may also allow routers to store separate additional vars (on creation only)
+
+	for _, m := range vars {
+		// maps.Copy(varList, m)
+		for k, v := range m {
+			varList[k] = goutil.Clean(v)
+		}
+	}
+
+	buf, err := compiler.Render(path, varList, isWidget)
+	if err != nil {
+		return err
+	}
+
+	if status, ok := varList["status"]; ok {
+		if i, e := strconv.Atoi(status); e == nil {
+			ctx.w.WriteHeader(i)
+			ctx.w.Write(buf)
+			return nil
+		}
+	}
+
+	// ctx.w.WriteHeader(http.StatusOK)
+	ctx.w.Write(buf)
+	return nil
+}
+
+/* func (ctx *Ctx) RenderOld(path string, vars ...Map) error {
 	filePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", path)
 	if err != nil {
 		return err
@@ -178,40 +228,40 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	// ctx.w.WriteHeader(http.StatusOK)
 	ctx.w.Write(buf)
 	return nil
-}
+} */
 
 func (ctx *Ctx) Error(path string, status int, msg string) error {
 	path = strings.TrimRight(path, "/")
 
 	err := ctx.Render(path+"/@"+strconv.Itoa(status), Map{
-		"status": strconv.Itoa(status),
-		"msg":    msg,
+		"status":  strconv.Itoa(status),
+		"message": msg,
 	})
 
 	if err != nil {
 		err = ctx.Render(path+"/@error", Map{
-			"status": strconv.Itoa(status),
-			"msg":    msg,
+			"status":  strconv.Itoa(status),
+			"message": msg,
 		})
 	}
 
 	if err != nil {
 		err = ctx.Render("@"+strconv.Itoa(status), Map{
-			"status": strconv.Itoa(status),
-			"msg":    msg,
+			"status":  strconv.Itoa(status),
+			"message": msg,
 		})
 	}
 
 	if err != nil {
 		err = ctx.Render("@error", Map{
-			"status": strconv.Itoa(status),
-			"msg":    msg,
+			"status":  strconv.Itoa(status),
+			"message": msg,
 		})
 	}
 
 	if err != nil {
 		ctx.w.WriteHeader(status)
-		ctx.w.Write([]byte(msg))
+		ctx.w.Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
 	}
 
 	return nil

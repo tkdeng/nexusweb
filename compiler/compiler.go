@@ -88,14 +88,17 @@ func ReadFileHTML(name string, domains []string) ([]byte, map[string]string, err
 	return buf, ymlVars, nil
 }
 
-func WriteFileHTML(name string, data []byte) error {
+func WriteFileHTML(name string, data []byte, root ...string) error {
 	name = strings.TrimSuffix(name, ".html")
 	name = strings.TrimSuffix(name, ".md")
 
 	decodeVars(&data)
 
-	/* seg := compSegHTML(&data)
-	PageBuf.Set(name, seg) */
+	// use in memory map instead of /dist filesystem
+	if len(root) != 0 && root[0] != "" {
+		PageBuf.Set(strings.TrimPrefix(name, root[0]), compSegHTML(&data))
+		return nil
+	}
 
 	return os.WriteFile(name+".html", data, 0755)
 }
@@ -200,12 +203,12 @@ func compSegHTML(buf *[]byte) []SegHTML {
 	for i := 0; i < len(bufSeg)-1; i++ {
 		seg = append(seg, SegHTML{
 			t:    0,
-			body: bufSeg[i],
+			body: compress.Zip(bufSeg[i]),
 		}, varSeg[i])
 	}
 	seg = append(seg, SegHTML{
 		t:    0,
-		body: bufSeg[len(bufSeg)-1],
+		body: compress.Zip(bufSeg[len(bufSeg)-1]),
 	})
 
 	return seg
@@ -250,8 +253,8 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 		os.WriteFile(root+"/pages/@widget.html", recodeVars(defBufWidget), 0755)
 	}
 
-	os.RemoveAll(root + "/dist")
-	os.MkdirAll(root+"/dist", 0755)
+	/* os.RemoveAll(root + "/dist")
+	os.MkdirAll(root+"/dist", 0755) */
 
 	layoutBuf, _, err := ReadFileHTML(root+"/pages/#layout", domains)
 	if err != nil {
@@ -277,7 +280,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	compVars(&layoutBuf, vars, nil)
 	CompressHTML(&layoutBuf, debugMode)
 
-	if err = WriteFileHTML(root+"/dist/#layout", compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars)); err != nil {
+	if err = WriteFileHTML(root+"/dist/#layout", compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars), root+"/dist"); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
 		fmt.Println(err)
 	}
@@ -285,7 +288,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	buf, ymlVars := compEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains)
 	compVars(&buf, vars, ymlVars)
 
-	if err = WriteFileHTML(root+"/dist/index", buf); err != nil {
+	if err = WriteFileHTML(root+"/dist/index", buf, root+"/dist"); err != nil {
 		PrintMsg("error", "Error: Failed to write home page!")
 		fmt.Println(err)
 	}
@@ -299,7 +302,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					buf, ymlVars := compEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains)
 					compVars(&buf, vars, ymlVars)
-					WriteFileHTML(root+"/dist/"+fileName, buf)
+					WriteFileHTML(root+"/dist/"+fileName, buf, root+"/dist")
 				}
 			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
 				if fName == "#layout.html" || fName == "#layout.md" {
@@ -311,7 +314,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 					CompressHTML(&buf, debugMode)
 
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					WriteFileHTML(root+"/dist/"+fileName, compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains, vars))
+					WriteFileHTML(root+"/dist/"+fileName, compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains, vars), root+"/dist")
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, debugMode); err != nil {
@@ -344,8 +347,8 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 
 	distPath := regex.Comp(`^(%1)/pages/([^\/]+(?:\/.*|))$`, root).RepStr(path, "$1/dist/$2")
 
-	os.MkdirAll(distPath, 0755)
-	if err := WriteFileHTML(distPath+"/index", buf); err != nil {
+	// os.MkdirAll(distPath, 0755)
+	if err := WriteFileHTML(distPath+"/index", buf, root+"/dist"); err != nil {
 		PrintMsg("error", "Error: Failed to write home page!")
 		fmt.Println(err)
 	}
@@ -359,14 +362,14 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					buf, ymlVars = compEmbed(root+"/pages", path, path+"/"+fileName, buf, domains)
 					compVars(&buf, vars, ymlVars)
-					WriteFileHTML(distPath+"/"+fileName, buf)
+					WriteFileHTML(distPath+"/"+fileName, buf, root+"/dist")
 				}
 			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
 				if buf, _, err := ReadFileHTML(path+"/"+fName, domains); err == nil {
 					compVars(&buf, vars, ymlVars)
 					CompressHTML(&buf, debugMode)
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
-					WriteFileHTML(distPath+"/"+fileName, compLayoutEmbed(root+"/pages", path, path+"/"+fileName, buf, domains, vars))
+					WriteFileHTML(distPath+"/"+fileName, compLayoutEmbed(root+"/pages", path, path+"/"+fileName, buf, domains, vars), root+"/dist")
 				}
 			} else if file.IsDir() {
 				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, debugMode); err != nil {
@@ -470,7 +473,7 @@ func compVars(buf *[]byte, vars map[string]string, ymlVars map[string]string) {
 					break
 				}
 
-				if plugin, ok := plugins.Get(string(name)); ok {
+				if plugin, ok := plugins.Get(string(name), true); ok {
 					args := map[string]string{}
 					ind := 0
 					regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
@@ -584,7 +587,7 @@ func compVars(buf *[]byte, vars map[string]string, ymlVars map[string]string) {
 					break
 				}
 
-				if plugin, ok := plugins.Get(string(name)); ok {
+				if plugin, ok := plugins.Get(string(name), true); ok {
 					args := map[string]string{}
 					ind := 0
 					regex.Comp(`([\w_\-]+)(?:\s*(=)\s*"([^"]*)"|'([^"]*)'|([\w_\-]+)|)`).RepFunc(atts, func(b func(int) []byte) []byte {
