@@ -1,6 +1,6 @@
 # Nexus Web
 
-A simple webserver.
+A simple webserver framework, similar to gofiber but uses the builtin http package.
 
 ## Installation
 
