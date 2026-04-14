@@ -2,6 +2,7 @@ package nxweb
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -157,8 +158,10 @@ func New(root string, config ...Config) (*App, error) {
 		// get request context (also verifies headers)
 		ctx, err := app.newCtx(w, r)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad Request!"))
+			if errors.Is(err, ctxInitError) {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad Request!"))
+			}
 			return
 		}
 

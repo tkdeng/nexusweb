@@ -2,6 +2,7 @@ package nxweb
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -42,10 +43,12 @@ type Ctx struct {
 	body  map[string]any // Cached JSON payload
 }
 
+var ctxInitError error = errors.New("CTX Init Error!")
+
 func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error) {
 	host, port, err := net.SplitHostPort(r.Host)
 	if err != nil {
-		return Ctx{}, err
+		return Ctx{}, errors.Join(ctxInitError, err)
 	}
 
 	// get ip address or remote host
@@ -55,7 +58,7 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 	}
 
 	if remoteIP == "" {
-		return Ctx{}, fmt.Errorf("unable to detect remote ip address")
+		return Ctx{}, errors.Join(ctxInitError, fmt.Errorf("unable to detect remote ip address"))
 	}
 
 	var userIP string
@@ -87,20 +90,53 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 		return ctx, err
 	}
 
+	if err := ctx.redirectSSL(); err != nil {
+		return ctx, err
+	}
+
 	return ctx, nil
 }
 
 func (ctx *Ctx) verifyOrigin() error {
 	// Validate Host against Origins
 	if len(ctx.router.Config.Origins) != 0 && !goutil.Contains(ctx.router.Config.Origins, ctx.Host) {
-		return fmt.Errorf("origin %s not allowed", ctx.Host)
+		msg := "Origin Not Allowed: " + ctx.Host
+		http.Error(ctx.w, msg, http.StatusForbidden)
+		return fmt.Errorf("%s", msg)
 	}
 
 	// Validate RemoteIP against Proxies
 	if len(ctx.router.Config.Proxies) > 0 {
 		if !goutil.Contains(ctx.router.Config.Proxies, ctx.RemoteIP) {
-			return fmt.Errorf("proxy %s not allowed", ctx.RemoteIP)
+			msg := "IP Proxy Not Allowed: " + ctx.RemoteIP
+			http.Error(ctx.w, msg, http.StatusForbidden)
+			return fmt.Errorf("%s", msg)
 		}
+	}
+
+	return nil
+}
+
+func (ctx *Ctx) redirectSSL() error {
+	if ctx.router.Config.PortSSL == 0 || ctx.r.TLS != nil || ctx.r.Header.Get("X-Forwarded-Proto") == "https" {
+		return nil
+	}
+
+	hostPort, _ := strconv.Atoi(ctx.Port)
+	sslPort := ctx.router.Config.PortSSL
+	httpPort := ctx.router.Config.Port
+
+	if uint16(hostPort) != sslPort && hostPort != 443 {
+		targetHost := ctx.Host
+
+		if uint16(hostPort) == httpPort || httpPort == 80 {
+			targetHost = fmt.Sprintf("%s:%d", ctx.Host, sslPort)
+		}
+
+		target := "https://" + targetHost + ctx.r.URL.RequestURI()
+
+		http.Redirect(ctx.w, ctx.r, target, http.StatusMovedPermanently)
+		return fmt.Errorf("redirecting to HTTPS")
 	}
 
 	return nil

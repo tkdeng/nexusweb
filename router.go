@@ -2,6 +2,7 @@ package nxweb
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	mpath "path"
@@ -54,8 +55,10 @@ func (router *Router) NewRouter(path string, vars ...Map) *Router {
 		// get request context (also verifies headers)
 		ctx, err := childRouter.newCtx(w, r)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad Request!"))
+			if errors.Is(err, ctxInitError) {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad Request!"))
+			}
 			return
 		}
 
