@@ -16,13 +16,27 @@ func Test(t *testing.T) {
 		PublicURI: "/public",
 	})
 
-	app.Use("/test/:var1/:var2", func(c *Ctx) error {
-		fmt.Println("--- r1 ^ ---")
+	app.Get("/test", func(c *Ctx) error {
+		fmt.Println(c.Params)
+		fmt.Println("--- r0 ^ ---")
 		return c.Next()
 	})
 
 	app.Use("/test/:var1/:var2", func(c *Ctx) error {
+		fmt.Println(c.Params)
+		fmt.Println("--- r1 ^ ---")
+		return c.Next()
+	})
+
+	app.Use("/test/:var1/:var2?", func(c *Ctx) error {
+		fmt.Println(c.Params)
 		fmt.Println("--- r2 ^ ---")
+		return nil
+	})
+
+	app.Use("/ok/:var1?", func(c *Ctx) error {
+		fmt.Println(c.Params)
+		fmt.Println("--- r3 ^ ---")
 		return nil
 	})
 

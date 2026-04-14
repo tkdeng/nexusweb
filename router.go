@@ -1,6 +1,7 @@
 package nxweb
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -108,8 +109,6 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 		paths[i] = strings.TrimSuffix(path, "/")
 	}
 
-	//todo: get dynamic :var1, :var2? values from paths
-
 	router.mu.Lock()
 	rcb, ok := router.cb.Get(paths[0])
 	if !ok {
@@ -122,11 +121,86 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 
 	rcb.mu.Lock()
 	*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
-		//todo: verify correct url path
-		//todo: handle :var1, :var2? values from paths[1:]
+		if len(paths) == 1 && c.Path != paths[0] {
+			return c.Next()
+		}
+
+		if len(paths) != 1 {
+			u := strings.Trim(strings.Replace(c.Path, paths[0], "", 1), "/")
+			if u == "" {
+				optPath := false
+				for i := 1; i < len(paths); i++ {
+					if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+						optPath = true
+						continue
+					}
+					optPath = false
+					break
+				}
+
+				if !optPath {
+					return c.Next()
+				}
+			}
+
+			uri := strings.Split(u, "/")
+
+			if len(uri) >= len(paths) {
+				return c.Next()
+			}
+
+			pathVars := map[string]string{}
+			for i := 1; i < len(paths); i++ {
+				if i-1 >= len(uri) {
+					if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+						break
+					}
+					return c.Next()
+				}
+				pathVars[strings.Trim(paths[i], "?")] = uri[i-1]
+			}
+
+			c.Params = pathVars
+		} else {
+			c.Params = map[string]string{}
+		}
+
+		if c.Method == "GET" {
+			c.query = c.r.URL.Query()
+		} else if c.Method == "POST" {
+			if strings.Contains(c.Type, "application/json") {
+				if c.body == nil {
+					c.body = make(map[string]any)
+					json.NewDecoder(c.r.Body).Decode(&c.body)
+				}
+			} else if c.form == nil {
+				if err := c.r.ParseForm(); err == nil {
+					c.form = c.r.PostForm
+				}
+			}
+		}
+
 		return cb(c)
 	})
 	rcb.mu.Unlock()
+}
+
+func (router *Router) Get(path string, cb func(c *Ctx) error) {
+	router.Use(path, func(c *Ctx) error {
+		if c.Method == "GET" {
+			return cb(c)
+		}
+		return c.Next()
+	})
+}
+
+func (router *Router) Post(path string, cb func(c *Ctx) error) {
+	router.Use(path, func(c *Ctx) error {
+		if c.Method == "POST" {
+			return cb(c)
+		}
+		return c.Next()
+	})
 }
 
 func (rcb *routeCB) run(ctx *Ctx) {

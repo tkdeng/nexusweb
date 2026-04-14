@@ -1,9 +1,11 @@
 package nxweb
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,11 +22,21 @@ type Ctx struct {
 	next     bool
 	rendered bool
 
-	Host string
-	Port string
-	Path string
-	IP   string
+	Host   string
+	Port   string
+	Path   string
+	IP     string
+	Method string
+	Type   string
+
+	Params map[string]string
+
+	query url.Values
+	form  url.Values
+	body  map[string]any
 }
+
+// type Query struct {}
 
 func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error) {
 	host, port, err := net.SplitHostPort(r.Host)
@@ -47,10 +59,12 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 		w:      w,
 		r:      r,
 
-		Host: goutil.Clean(host),
-		Port: goutil.Clean(port),
-		Path: "/" + strings.Trim(goutil.Clean(r.URL.Path), "/"),
-		IP:   goutil.Clean(remoteIP),
+		Host:   goutil.Clean(host),
+		Port:   goutil.Clean(port),
+		Path:   "/" + strings.Trim(goutil.Clean(r.URL.Path), "/"),
+		IP:     goutil.Clean(remoteIP),
+		Method: goutil.Clean(r.Method),
+		Type:   goutil.Clean(r.Header.Get("Content-Type")),
 	}, nil
 }
 
@@ -265,4 +279,107 @@ func (ctx *Ctx) Error(path string, status int, msg string) error {
 	}
 
 	return nil
+}
+
+// Query returns the value of a query parameter and a boolean indicating if it exists
+func (ctx *Ctx) Query(key string) (value string, ok bool) {
+	if ctx.query == nil {
+		ctx.query = ctx.r.URL.Query()
+	}
+
+	val, ok := ctx.query[key]
+	if !ok {
+		return "", false
+	}
+
+	if len(val) == 0 {
+		return "", true
+	}
+
+	return goutil.Clean(val[0]), true
+}
+
+// SetQuery sets a query parameter
+//
+// If no value is provided, the key is deleted
+func (ctx *Ctx) SetQuery(key string, value ...string) {
+	if ctx.query == nil {
+		ctx.query = ctx.r.URL.Query()
+	}
+
+	if len(value) == 0 {
+		ctx.query.Del(key)
+	} else {
+		ctx.query.Set(key, value[0])
+	}
+}
+
+// Body returns a value from the request body (JSON or Form) and a boolean for existence.
+//
+// If the Content-Type is application/json, it looks up the key in the JSON body.
+// Otherwise, it looks up the key in the POST form data.
+func (ctx *Ctx) Body(key string) (value string, ok bool) {
+	if strings.Contains(ctx.Type, "application/json") {
+		if ctx.body == nil {
+			ctx.body = make(map[string]any)
+			json.NewDecoder(ctx.r.Body).Decode(&ctx.body)
+		}
+
+		val, ok := ctx.body[key]
+		if !ok {
+			return "", false
+		}
+
+		return goutil.Clean(fmt.Sprintf("%v", val)), true
+	}
+
+	if ctx.form == nil {
+		if err := ctx.r.ParseForm(); err != nil {
+			return "", false
+		}
+		ctx.form = ctx.r.PostForm
+	}
+
+	val, ok := ctx.form[key]
+	if !ok {
+		return "", false
+	}
+
+	if len(val) == 0 {
+		return "", true
+	}
+
+	return goutil.Clean(val[0]), true
+}
+
+// SetBody sets a post body parameter
+//
+// If no value is provided, the key is deleted
+func (ctx *Ctx) SetBody(key string, value ...string) {
+	if strings.Contains(ctx.Type, "application/json") {
+		if ctx.body == nil {
+			ctx.body = make(map[string]any)
+			json.NewDecoder(ctx.r.Body).Decode(&ctx.body)
+		}
+
+		if len(value) == 0 {
+			delete(ctx.body, key)
+		} else {
+			ctx.body[key] = value[0]
+		}
+		return
+	}
+
+	if ctx.form == nil {
+		if err := ctx.r.ParseForm(); err != nil {
+			return
+		}
+		ctx.form = ctx.r.PostForm
+	}
+
+	if len(value) == 0 {
+		ctx.form.Del(key)
+	} else {
+		ctx.form.Set(key, value[0])
+	}
 }
