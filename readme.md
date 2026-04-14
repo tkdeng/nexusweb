@@ -1,14 +1,26 @@
-# Nexus Web
+# Nexus Web 🚀
 
-A simple webserver framework, similar to gofiber but uses the builtin http package.
+Nexus Web is a high-performance Go web framework designed for developers who want the simplicity of [Fiber](https://github.com/gofiber/fiber) but prefer the stability and compatibility of the built-in `net/http` package.
 
-## Installation
+It features a unique **hybrid template engine** that pre-compiles static variables at startup while allowing flexible dynamic injection at runtime.
+
+---
+
+## ✨ Key Features
+
+- **Zero Dependencies**: Built on top of standard `net/http`.
+- **Static Pre-compilation**: Faster renders by resolving static variables before the server starts.
+- **Smart Layouts**: Automatic inheritance of `head.html` and `body.html` across directories.
+- **Shortcode Plugins**: WordPress-style plugins for reusable UI components.
+- **Markdown Native**: Full GitHub-flavored markdown support with YAML frontmatter.
+
+## 📦 Installation
 
 ```shell
 go get github.com/tkdeng/nexusweb
 ```
 
-## Usage
+## 🚀 Quick Start
 
 ```go
 
@@ -19,18 +31,14 @@ import (
 func main(){
   app, err := nxweb.New("./test", nxweb.Config{
     Port: 8080,
-    ...
-
-    Vars: nxweb.Map{ // note: these will be precompiled statically before the server runs
-      "myVar": "constant var value"
-      ...
+    Vars: nxweb.Map{
+      "myVar": "This is a static constant" // Pre-compiled for performance
     },
   })
 
   app.Use("/path", func(c *nxweb.Ctx) error {
     return c.Render("index", Map{
-      "myVar": "dynamic var value"
-      ...
+      "myVar": "This is dynamic!" // Overrides or adds at runtime
     })
   })
 
