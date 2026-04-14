@@ -85,6 +85,11 @@ func (router *Router) NewRouter(path string, vars ...Map) *Router {
 			return
 		}
 
+		if ctx.status != 0 && ctx.status != 200 {
+			ctx.w.WriteHeader(ctx.status)
+			return
+		}
+
 		// catch 404 error
 		if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

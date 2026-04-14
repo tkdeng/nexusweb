@@ -210,6 +210,11 @@ func New(root string, config ...Config) (*App, error) {
 			if ctx.rendered {
 				return
 			}
+
+			if ctx.status != 0 && ctx.status != 200 {
+				ctx.w.WriteHeader(ctx.status)
+				return
+			}
 		}
 
 		// handle static pages
