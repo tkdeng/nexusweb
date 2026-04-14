@@ -47,107 +47,46 @@ func main(){
 
 ```
 
-## 📂 Template System
+## 🛠 Template Syntax
 
-Nexus Web uses a file-prefix system to organize your UI:
+| Feature | Syntax | Description |
+| :--- | :--- | :--- |
+| **Embed** | `{@file}` | Embeds a file with cascading inheritance. |
+| **Static** | `{var}` | Pre-compiled at startup. HTML-escaped. |
+| **Dynamic** | `{$var}` | Runtime variable via `c.Render`. |
+| **Raw** | `{#var}` | Renders without HTML escaping. |
+| **Escaped Arg** | `{=var}` | Safely escapes variable for HTML attributes. |
+| **Attr Guard** | `{class="var"}` | Renders the attribute only if `var` is not empty. |
+| **Default** | `{var\|def}` | Provides a fallback value if `var` is empty. |
+| **If** | `{?var{...}}` | Renders content if `var` is present/true. |
+| **Unless** | `{!var{...}}` | Renders content if `var` is missing/false. |
+| **Plugin** | `{:name}` | Executes a custom shortcode/plugin (supports optional `{content}`). |
 
-- #layout.html: The entry point (wrapper). Must include {@body} and optionally {@head}.
-- @widget.html: Dynamic components, APIs, or snippets.
-- body.html / head.html: Page-specific content that automatically inherits from parent directories if missing.
-- @error.html: Global error handler (or use @404.html, @500.html for specific codes).
+## 📂 Cascading Inheritance
 
-Files starting with `#` such as `#layout.html` are for layouts.
+Nexus Web uses a recursive search for any embedded file (`{@filename}`). This applies to **all** file types.
 
-Files starting with `@` such as `@widget.html` or `@error.html` are for widgets, errors, apis, and dynamic content.
+- `#layout.html`: The entry point for the engine.
+- `@widget.html`: Reserved for widgets, logic, and error handling (e.g., `@404.html`).
+- `*.html / *.md`: Components embedded via `{@filename}`.
 
-Regular files such as `body.html`, `head.html`, `custom.html` are files that can be
-embedded, starting with the layout as the entry point. Your `#layout.html` file should include a `{@body}` and optionally `{@head}` embed, to embed the relative files. These files (`body.html`, etc) can optionally embed more files, such as `{@custom}` for example.
+**Example:**
+If `/blog/index.html` calls `{@sidebar}`, but `/blog/sidebar.html` is missing, the engine automatically "climbs" the directory tree to use the root `/sidebar.html`.
 
-You can also embed `@widget.html` files directly.
-
-If your `body.html` file in a higher directory/page (`about/body.html`, etc) is missing other files such as `head.html` or `custom.html` that its trying to embed, it will automatically inherit the parent files for those embeds.
-
-The file `@error.html` automatically catches errors, sending `{status}` and `{message}` variables. You can also make separate pages for specific error statuses, in a similar way (`@404.html`, `@500.html`, etc).
-
-```html
-
-<body>
-  {myVar} <!-- will escape html by default -->
-
-  <!-- adding an `=` means the var will escape quotes for html args -->
-  <div class="{=escapeArgsVar}">
-    {#rawHtmlVar} <!-- adding `#` means it will not escape html -->
-  </div>
-
-  {$dynamicVar} <!-- adding `$` makes it dynamic and compile at runtime -->
-
-  <!-- putting the key before the `=`, allows the whole arg to disappear when empty -->
-  <div {class="myVar"}></div>
-
-  <!-- append an `|` at the end of the var name, to set a default/fallback value -->
-  <div def-arg="{=myVar|default}"></div>
-
-  <!-- if statements (if myVar exists) -->
-  {?myVar{
-    <form>
-      ...
-    </form>
-  }}
-
-  <!-- unless statements (if myVar does not exist) -->
-  {!myVar{
-    <article>
-      reasons `myVar` is missing or has an empty value
-      ...
-    </article>
-  }}
-
-  <!-- plugins/shortcodes can easily be embedded (similar to wordpress shortcodes) -->
-  {:plugin arg1="value" arg2 {
-    content
-  }}
-
-  <!-- this framework comes with some builtin plugins/functions -->
-  {:lorem}
-</body>
-
-```
-
-## plugins
+## 🔌 Plugins
 
 ```go
+import "github.com/tkdeng/nexusweb/plugins"
 
-import (
-  plugins "github.com/tkdeng/nexusweb/plugins"
-)
-
-func init(){
-  // create new plugin
+func init() {
+  // Runs every render
   plugins.New("button", func(args map[string]string, cont []byte, static bool) ([]byte, error) {
-		return []byte("<button>"+args["name"]+"<button>"), nil
-	})
+    return []byte("<button>"+args["text"]+"</button>"), nil
+  })
 
-  // create static plugin
-  plugins.New("fastbutton", func(args map[string]string, cont []byte, static bool) ([]byte, error) {
-		return []byte("<button>"+args["name"]+"<button>"), nil
-	}, true) // adding true makes this plugin run at compiletime
+  // Runs once at compile-time (Static)
+  plugins.New("fast", func(args map[string]string, cont []byte, static bool) ([]byte, error) {
+    return []byte("<div>Optimized</div>"), nil
+  }, true)
 }
-
-```
-
-## Markdown
-
-```md
-
----
-title: "Web Server"
-ymlvars: "my yml vars at top of page"
----
-
-<!-- adding yml vars overrides {$vars} to a static value for this page -->
-<!-- these will be added at compiletime -->
-<!-- this feature is also supported in regular html files -->
-
-# Markdown Supported (based on github)
-
 ```
