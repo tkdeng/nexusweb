@@ -8,11 +8,11 @@ It features a unique **hybrid template engine** that pre-compiles static variabl
 
 ## ✨ Key Features
 
-- **Built on net/http**: Standard library stability with a Fiber-like DX.
-- **Markdown Native**: Full GitHub-Flavored Markdown (GFM) support. Any .md file is automatically processed as a page.
-- **Hybrid Engine**: Pre-compiles static content at startup; injects dynamic data at runtime.
-- **Cascading Templates**: Automatic inheritance—missing files are inherited from the nearest parent directory.
-- **Shortcode Plugins**: WordPress-style logic for reusable UI components.
+- **Standard Library Core**: Built directly on `net/http` for maximum compatibility and longevity.
+- **Static Pre-compilation**: Blazing fast renders by resolving static variables and constants at server startup.
+- **Inherited Layouts**: Intelligent directory-based inheritance for `head.html` and `body.html`.
+- **Shortcode Plugins**: WordPress-inspired plugins for reusable UI components and logic.
+- **Markdown Native**: Seamless GitHub-flavored Markdown support with YAML frontmatter integration.
 
 ## 📦 Installation
 
@@ -47,14 +47,7 @@ func main(){
 
 ```
 
-## 📂 Template System
-
-Nexus Web uses a file-prefix system to organize your UI:
-
-- #layout.html: The entry point (wrapper). Must include {@body} and optionally {@head}.
-- @widget.html: Dynamic components, APIs, or snippets.
-- body.html / head.html: Page-specific content that automatically inherits from parent directories if missing.
-- @error.html: Global error handler (or use @404.html, @500.html for specific codes).
+## HTML
 
 Files starting with `#` such as `#layout.html` are for layouts.
 
