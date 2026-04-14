@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	mpath "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,34 +16,47 @@ import (
 	"github.com/tkdeng/regex"
 )
 
+// App is the primary entry point for the application.
+// It embeds the core Router and manages the server lifecycle.
 type App struct {
 	Router
 }
 
+// Config defines the framework settings, including server ports,
+// security headers, and asset directories.
 type Config struct {
-	Title    string
-	AppTitle string
-	Desc     string
-	Icon     string
+	Title    string // Website meta title
+	AppTitle string // Application display name
+	Desc     string // Meta description
+	Icon     string // Path to favicon or app icon
 
-	AssetsURI string
-	PublicURI string
+	AssetsURI string // Public path for compiled assets
+	PublicURI string // Public path for static files
 
-	Origins []string
-	Proxies []string
+	// Origins []string
+	// Proxies []string
 
-	Vars Map
+	Vars Map // Global variables available to all templates
 
-	Port    uint16
-	PortSSL uint16
+	Port    uint16 // HTTP port (default: 8080)
+	PortSSL uint16 // HTTPS port (default: 8443)
 
-	DebugMode bool
+	// DevMode (Development Mode) optimizes the framework for active development.
+	// When true, it disables asset compression and internal caching, ensuring
+	// that changes to files and templates are reflected immediately. It also
+	// enables framework-level diagnostic tools for the developer.
+	DevMode bool
 
-	Root string
+	Root string // The filesystem root of the project
 
+	// Domains identifies internal project domains.
+	// Used by the rendering engine to determine link behavior (e.g., whether
+	// a Markdown link is internal or requires target="_blank").
 	Domains []string
 }
 
+// Map is a shorthand for map[string]string, used primarily for
+// passing template variables or configuration sets.
 type Map map[string]string
 
 // New creates a new webserver
@@ -83,7 +97,7 @@ func New(root string, config ...Config) (*App, error) {
 		"icon":     goutil.Clean(config[0].Icon),
 		"assets":   goutil.Clean(config[0].AssetsURI),
 		"public":   goutil.Clean(config[0].PublicURI),
-		"debug":    goutil.ToType[string](config[0].DebugMode),
+		"devmode":    goutil.ToType[string](config[0].DevMode),
 	}
 
 	// maps.Copy(compVars, config[0].Vars)
@@ -91,7 +105,7 @@ func New(root string, config ...Config) (*App, error) {
 		compVars[k] = goutil.Clean(v)
 	}
 
-	err = compiler.Compile(root, compVars, config[0].Domains, config[0].DebugMode)
+	err = compiler.Compile(root, compVars, config[0].Domains, config[0].DevMode)
 	if err != nil {
 		return &App{}, err
 	}
@@ -113,9 +127,9 @@ func New(root string, config ...Config) (*App, error) {
 		Router{
 			mux:    mux,
 			Config: config[0],
-			path:   "",
-			routes: goutil.NewMap[string, *Router](),
+			path:   "/",
 			cb:     goutil.NewMap[string, *routeCB](),
+			vars:   make(map[string]string),
 		},
 	}
 
@@ -131,7 +145,7 @@ func New(root string, config ...Config) (*App, error) {
 		mux.Handle(uri, http.StripPrefix(uri, http.FileServer(http.Dir(root+"/public"))))
 	}
 
-	app.handler = func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// get request context (also verifies headers)
 		ctx, err := app.newCtx(w, r)
 		if err != nil {
@@ -172,7 +186,8 @@ func New(root string, config ...Config) (*App, error) {
 			}
 
 			for ctx.next {
-				cPath = filepath.Dir(cPath)
+				cPath = mpath.Dir(cPath)
+				cPath = mpath.Clean("/" + cPath)
 				if cPath == "/" {
 					break
 				}
@@ -202,9 +217,7 @@ func New(root string, config ...Config) (*App, error) {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Internal Server Error!"))
 		}
-	}
-
-	mux.HandleFunc("/", app.handler)
+	})
 
 	return app, nil
 }

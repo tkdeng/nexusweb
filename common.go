@@ -275,3 +275,10 @@ func PrintMsg(color string, msg string, size int, end bool) {
 		fmt.Print("\r\x1b[" + color + "m" + msg + "\x1b[0m")
 	}
 }
+
+// ToType attempts to converts an interface{} from the many possible types in golang, to a specific type of your choice
+//
+// if it fails to convert, it will return a nil/zero value for the appropriate type
+func ToType[T goutil.SupportedType](val any) T {
+	return goutil.ToType[T](val)
+}

@@ -214,7 +214,7 @@ func compSegHTML(buf *[]byte) []SegHTML {
 	return seg
 }
 
-func CompressHTML(buf *[]byte, debugMode bool) {
+func CompressHTML(buf *[]byte, devMode bool) {
 	// minify HTML
 	m := minify.New()
 	m.AddFunc("text/html", html.Minify)
@@ -223,7 +223,7 @@ func CompressHTML(buf *[]byte, debugMode bool) {
 		KeepQuotes:       true,
 		KeepDocumentTags: true,
 		KeepEndTags:      true,
-		KeepWhitespace:   debugMode,
+		KeepWhitespace:   devMode,
 	})
 
 	var b bytes.Buffer
@@ -232,7 +232,7 @@ func CompressHTML(buf *[]byte, debugMode bool) {
 	}
 }
 
-func Compile(root string, vars map[string]string, domains []string, debugMode bool) error {
+func Compile(root string, vars map[string]string, domains []string, devMode bool) error {
 	if stat, err := os.Stat(root + "/pages"); err != nil || !stat.IsDir() {
 		if stat.IsDir() {
 			return fmt.Errorf("pages directory is missing")
@@ -278,7 +278,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	}
 
 	compVars(&layoutBuf, vars, nil)
-	CompressHTML(&layoutBuf, debugMode)
+	CompressHTML(&layoutBuf, devMode)
 
 	if err = WriteFileHTML(root+"/dist/#layout", compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/#layout", layoutBuf, domains, vars), root+"/dist"); err != nil {
 		PrintMsg("error", "Error: Failed to write root #layout page!")
@@ -311,13 +311,13 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 
 				if buf, _, err := ReadFileHTML(root+"/pages/"+fName, domains); err == nil {
 					compVars(&buf, vars, nil)
-					CompressHTML(&buf, debugMode)
+					CompressHTML(&buf, devMode)
 
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					WriteFileHTML(root+"/dist/"+fileName, compLayoutEmbed(root+"/pages", root+"/pages", root+"/pages/"+fileName, buf, domains, vars), root+"/dist")
 				}
 			} else if file.IsDir() {
-				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, debugMode); err != nil {
+				if err = compPages(root, root+"/pages/"+fName, vars, domains, &layoutBuf, devMode); err != nil {
 					PrintMsg("error", "Error: Failed to compile page!")
 					fmt.Println("  path:", root+"/pages/"+fName)
 					fmt.Println(err)
@@ -333,7 +333,7 @@ func Compile(root string, vars map[string]string, domains []string, debugMode bo
 	return nil
 }
 
-func compPages(root string, path string, vars map[string]string, domains []string, layoutBuf *[]byte, debugMode bool) error {
+func compPages(root string, path string, vars map[string]string, domains []string, layoutBuf *[]byte, devMode bool) error {
 	var buf []byte
 	var ymlVars map[string]string
 
@@ -367,12 +367,12 @@ func compPages(root string, path string, vars map[string]string, domains []strin
 			} else if !file.IsDir() && strings.HasPrefix(fName, "#") {
 				if buf, _, err := ReadFileHTML(path+"/"+fName, domains); err == nil {
 					compVars(&buf, vars, ymlVars)
-					CompressHTML(&buf, debugMode)
+					CompressHTML(&buf, devMode)
 					fileName := regex.Comp(`\.(html|md)$`).RepLitStr(fName, "")
 					WriteFileHTML(distPath+"/"+fileName, compLayoutEmbed(root+"/pages", path, path+"/"+fileName, buf, domains, vars), root+"/dist")
 				}
 			} else if file.IsDir() {
-				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, debugMode); err != nil {
+				if err = compPages(root, path+"/"+fName, vars, domains, layoutBuf, devMode); err != nil {
 					PrintMsg("error", "Error: Failed to compile page!")
 					fmt.Println("  path:", root+"/pages/"+fName)
 					fmt.Println(err)

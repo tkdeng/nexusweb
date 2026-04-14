@@ -4,26 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	mpath "path"
 	"strings"
 	"sync"
 
 	"github.com/tkdeng/goutil"
 )
 
+// Router handles path-based request multiplexing and middleware registration.
 type Router struct {
-	mux    *http.ServeMux
-	Config Config
+	mux    *http.ServeMux // Standard library multiplexer
+	Config Config         // Global framework settings
 
-	// app  *App
-	path string
-
-	routes *goutil.SyncMap[string, *Router]
+	path string // Base prefix for this specific router instance
 
 	mu sync.RWMutex
-	// cb []func(c *Ctx) error
-	cb *goutil.SyncMap[string, *routeCB]
+	cb *goutil.SyncMap[string, *routeCB] // Thread-safe storage for route callbacks
 
-	handler func(w http.ResponseWriter, r *http.Request)
+	vars map[string]string // Persistent variables passed to the render engine
 }
 
 type routeCB struct {
@@ -31,78 +29,74 @@ type routeCB struct {
 	mu sync.RWMutex
 }
 
-func (router *Router) newRouter(path string) *Router {
-	//todo: may rebuild method to mirror similar to neweb default router
-	// note: router.app.mux.HandleFunc will not run root handler,
-	// so things may need to be redefined.
-	// also may need to check if assets need to be rerequested,
-	// if config.AssetsURI == "/"
+// NewRouter creates a sub-router mounted at the specified path.
+//
+// It provides prefix-based isolation (e.g., /api) and inherits parent
+// variables, which are automatically injected into the Render engine.
+func (router *Router) NewRouter(path string, vars ...Map) *Router {
+	path = mpath.Clean("/" + strings.Trim(path, "/"))
 
-	var childRouter *Router
-	router.mu.Lock()
-	if r, ok := router.routes.Get(path); ok {
-		childRouter = r
-	} else {
-		childRouter = &Router{
-			// app:    router.app,
-			path:   path,
-			routes: goutil.NewMap[string, *Router](),
-			// cb:     []func(c *Ctx) error{},
-			cb: goutil.NewMap[string, *routeCB](),
-		}
-
-		childRouter.handler = func(w http.ResponseWriter, r *http.Request) {
-			ctx, err := router.newCtx(w, r)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad Request!"))
-				return
-			}
-
-			//todo: ensure assets are handled properly
-
-			/* ctx.next = true
-			for _, cb := range childRouter.cb {
-				if !ctx.next {
-					break
-				}
-				ctx.next = false
-
-				if err := cb(&ctx); err != nil {
-					break
-				}
-			} */
-
-			if err := ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Internal Server Error!"))
-			}
-		}
-
-		router.routes.Set(path, childRouter)
-		router.mux.HandleFunc(path, childRouter.handler)
+	childRouter := &Router{
+		mux:    router.mux,
+		Config: router.Config,
+		path:   path,
+		cb:     goutil.NewMap[string, *routeCB](),
+		vars:   router.vars,
 	}
-	router.mu.Unlock()
+
+	if len(vars) > 0 {
+		for k, v := range vars[0] {
+			childRouter.vars[k] = goutil.Clean(v)
+		}
+	}
+
+	router.mux.HandleFunc(path+"/", func(w http.ResponseWriter, r *http.Request) {
+		// get request context (also verifies headers)
+		ctx, err := childRouter.newCtx(w, r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad Request!"))
+			return
+		}
+
+		// handle route callbacks
+		cPath := strings.TrimPrefix(ctx.Path, path)
+		rcb, ok := childRouter.cb.Get(cPath)
+		ctx.next = true
+		if ok {
+			rcb.run(&ctx)
+		}
+
+		for ctx.next {
+			cPath = mpath.Dir(cPath)
+			cPath = mpath.Clean("/" + cPath)
+			if cPath == "/" {
+				break
+			}
+			if rcb, ok = childRouter.cb.Get(cPath); ok {
+				rcb.run(&ctx)
+			}
+		}
+
+		if ctx.rendered {
+			return
+		}
+
+		// catch 404 error
+		if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal Server Error!"))
+		}
+	})
 
 	return childRouter
 }
 
-//todo: may use a separate method for routers instead (to simplify)
-
-func (router *Router) Router(path string, vars Map) *Router {
-	paths := strings.Split(path, ":")
-
-	//todo: get dynamic :var1, :var2? values from paths
-
-	fmt.Println(paths)
-
-	childRouter := router.newRouter(paths[0])
-
-	// childRouter.cb = append(childRouter.cb, cb)
-
-	return childRouter
-}
-
+// Use registers a callback for a specific path pattern.
+//
+// Supports static paths, dynamic segments (/:id), and optional parameters (/:id?).
+// It automatically prepares the request body and form data based on the
+// Content-Type header before reaching child handlers.
 func (router *Router) Use(path string, cb func(c *Ctx) error) {
 	paths := strings.Split(path, ":")
 	for i, path := range paths {
@@ -118,6 +112,10 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 		router.cb.Set(paths[0], rcb)
 	}
 	router.mu.Unlock()
+
+	if router.path != "/" && router.path != "" {
+		paths[0] = mpath.Join(router.path, paths[0])
+	}
 
 	rcb.mu.Lock()
 	*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
@@ -185,6 +183,9 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 	rcb.mu.Unlock()
 }
 
+// Query returns the value of a query parameter and a boolean indicating its existence.
+//
+// It lazily initializes the query map from the request URL.
 func (router *Router) Get(path string, cb func(c *Ctx) error) {
 	router.Use(path, func(c *Ctx) error {
 		if c.Method == "GET" {
@@ -194,6 +195,10 @@ func (router *Router) Get(path string, cb func(c *Ctx) error) {
 	})
 }
 
+// SetQuery modifies or deletes a query parameter in the current context.
+//
+// If a value is provided, it updates the parameter; if no value is provided,
+// the key is deleted from the query map.
 func (router *Router) Post(path string, cb func(c *Ctx) error) {
 	router.Use(path, func(c *Ctx) error {
 		if c.Method == "POST" {
@@ -206,6 +211,7 @@ func (router *Router) Post(path string, cb func(c *Ctx) error) {
 func (rcb *routeCB) run(ctx *Ctx) {
 	rcb.mu.RLock()
 	ctx.next = true
+
 	for _, cb := range *rcb.cb {
 		if !ctx.next {
 			break

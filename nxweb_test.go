@@ -8,7 +8,7 @@ import (
 func Test(t *testing.T) {
 	app, err := New("./test", Config{
 		Port:      3000,
-		DebugMode: true,
+		DevMode: true,
 		Domains: []string{
 			"localhost",
 		},
@@ -38,6 +38,13 @@ func Test(t *testing.T) {
 		fmt.Println(c.Params)
 		fmt.Println("--- r3 ^ ---")
 		return nil
+	})
+
+	api := app.NewRouter("/api")
+
+	api.Use("/test", func(c *Ctx) error {
+		fmt.Println("called test route")
+		return c.Render("@widget")
 	})
 
 	if err != nil {

@@ -14,29 +14,31 @@ import (
 	"github.com/tkdeng/nexusweb/compiler"
 )
 
+// Ctx represents the request/response context.
+// It provides a unified API for data retrieval, routing parameters, and response control.
 type Ctx struct {
 	router *Router
 	w      http.ResponseWriter
 	r      *http.Request
 
-	next     bool
-	rendered bool
+	next     bool // Internal flag to signal execution of the next handler
+	rendered bool // Internal flag to prevent double-rendering
 
-	Host   string
-	Port   string
-	Path   string
-	IP     string
-	Method string
-	Type   string
+	// Public Request Metadata
+	Host   string // The hostname requested (e.g., example.com)
+	Port   string // The port the request arrived on
+	Path   string // The sanitized request path
+	IP     string // The client's remote IP address
+	Method string // HTTP method (GET, POST, etc.)
+	Type   string // Content-Type header of the request
 
+	// Params contains dynamic route segments (e.g., :id)
 	Params map[string]string
 
-	query url.Values
-	form  url.Values
-	body  map[string]any
+	query url.Values     // Cached URL search parameters
+	form  url.Values     // Cached POST form data
+	body  map[string]any // Cached JSON payload
 }
-
-// type Query struct {}
 
 func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error) {
 	host, port, err := net.SplitHostPort(r.Host)
@@ -68,43 +70,6 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 	}, nil
 }
 
-/* func (ctx *Ctx) getLayout(path string) ([]byte, error) {
-	if filepath.Base(path)[0] != '@' {
-		return nil, fmt.Errorf("layout not found")
-	}
-
-	// lPath := regex.Comp(`\/@([\w_\-\.]+)$`).RepLitStr(path, "/#layout.html")
-	lPath := filepath.Join(filepath.Dir(path), "/#layout.html")
-
-	lFilePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", lPath)
-	if err != nil {
-		return nil, err
-	}
-
-	lbuf, err := os.ReadFile(lFilePath)
-	for err != nil {
-		cPath := lPath
-		// lPath = regex.Comp(`\/[\w_\-\.]+(\/#[\w_\-\.]+)$`).RepStr(lPath, "$1")
-		lPath = filepath.Join(filepath.Dir(filepath.Dir(lPath)), filepath.Base(lPath))
-
-		if cPath == lPath {
-			break
-		}
-
-		if lFilePath, err = goutil.JoinPath(ctx.router.Config.Root, "dist", lPath); err != nil {
-			return nil, err
-		}
-
-		lbuf, err = os.ReadFile(lFilePath)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return lbuf, nil
-} */
-
 func (ctx *Ctx) Next() error {
 	ctx.next = true
 	return nil
@@ -135,15 +100,16 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		"desc":     goutil.Clean(ctx.router.Config.Desc),
 		"icon":     goutil.Clean(ctx.router.Config.Icon),
 		"public":   goutil.Clean(ctx.router.Config.PublicURI),
-		"debug":    goutil.ToType[string](ctx.router.Config.DebugMode),
+		"devmode":    goutil.ToType[string](ctx.router.Config.DevMode),
 	}
 
 	for k, v := range ctx.router.Config.Vars {
 		varList[k] = goutil.Clean(v)
 	}
 
-	//todo: set other dynamic vars
-	// may also allow routers to store separate additional vars (on creation only)
+	for k, v := range ctx.router.vars {
+		varList[k] = goutil.Clean(v)
+	}
 
 	for _, m := range vars {
 		// maps.Copy(varList, m)
@@ -169,80 +135,6 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 	ctx.w.Write(buf)
 	return nil
 }
-
-/* func (ctx *Ctx) Render(path string, vars ...Map) error {
-	filePath, err := goutil.JoinPath(ctx.router.Config.Root, "dist", path)
-	if err != nil {
-		return err
-	}
-
-	isWidget := false
-	if filename := filepath.Base(filePath); filename[0] == '@' || filename == "index" {
-		filePath += ".html"
-		if filename[0] == '@' {
-			isWidget = true
-		}
-	} else {
-		filePath += "/index.html"
-	}
-
-	buf, err := os.ReadFile(filePath)
-
-	if err != nil && strings.HasSuffix(filePath, "/index.html") {
-		filePath = strings.TrimSuffix(filePath, "/index.html")
-		buf, err = os.ReadFile(filePath)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if isWidget {
-		if lBuf, err := ctx.getLayout(path); err == nil && lBuf != nil {
-			// buf = regex.Comp(`{@body}`).Rep(lBuf, buf)
-			buf = bytes.ReplaceAll(lBuf, []byte("{@body}"), buf)
-		}
-	}
-
-	varList := map[string]string{
-		"title":    goutil.Clean(ctx.router.Config.Title),
-		"apptitle": goutil.Clean(ctx.router.Config.AppTitle),
-		"desc":     goutil.Clean(ctx.router.Config.Desc),
-		"icon":     goutil.Clean(ctx.router.Config.Icon),
-		"public":   goutil.Clean(ctx.router.Config.PublicURI),
-		"debug":    goutil.ToType[string](ctx.router.Config.DebugMode),
-	}
-
-	for k, v := range ctx.router.Config.Vars {
-		varList[k] = goutil.Clean(v)
-	}
-
-	//todo: set other dynamic vars
-	// may also allow routers to store separate additional vars (on creation only)
-
-	for _, m := range vars {
-		// maps.Copy(varList, m)
-		for k, v := range m {
-			varList[k] = goutil.Clean(v)
-		}
-	}
-
-	if err = compiler.Render(&buf, ctx.router.Config.Root, filePath, varList, isWidget); err != nil {
-		return err
-	}
-
-	if status, ok := varList["status"]; ok {
-		if i, e := strconv.Atoi(status); e == nil {
-			ctx.w.WriteHeader(i)
-			ctx.w.Write(buf)
-			return nil
-		}
-	}
-
-	// ctx.w.WriteHeader(http.StatusOK)
-	ctx.w.Write(buf)
-	return nil
-} */
 
 func (ctx *Ctx) Error(path string, status int, msg string) error {
 	path = strings.TrimRight(path, "/")
@@ -318,7 +210,7 @@ func (ctx *Ctx) SetQuery(key string, value ...string) {
 //
 // If the Content-Type is application/json, it looks up the key in the JSON body.
 // Otherwise, it looks up the key in the POST form data.
-func (ctx *Ctx) Body(key string) (value string, ok bool) {
+func (ctx *Ctx) Body(key string) (value any, ok bool) {
 	if strings.Contains(ctx.Type, "application/json") {
 		if ctx.body == nil {
 			ctx.body = make(map[string]any)
@@ -327,26 +219,32 @@ func (ctx *Ctx) Body(key string) (value string, ok bool) {
 
 		val, ok := ctx.body[key]
 		if !ok {
-			return "", false
+			return nil, false
 		}
 
-		return goutil.Clean(fmt.Sprintf("%v", val)), true
+		if v, ok := val.(string); ok {
+			val = goutil.Clean(v)
+		} else if v, ok := val.([]byte); ok {
+			val = goutil.Clean(v)
+		}
+
+		return val, true
 	}
 
 	if ctx.form == nil {
 		if err := ctx.r.ParseForm(); err != nil {
-			return "", false
+			return nil, false
 		}
 		ctx.form = ctx.r.PostForm
 	}
 
 	val, ok := ctx.form[key]
 	if !ok {
-		return "", false
+		return nil, false
 	}
 
 	if len(val) == 0 {
-		return "", true
+		return nil, true
 	}
 
 	return goutil.Clean(val[0]), true
