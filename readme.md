@@ -8,7 +8,7 @@ It features a unique **hybrid template engine** that pre-compiles static variabl
 
 ## ✨ Key Features
 
-- **Zero Dependencies**: Built on top of standard `net/http`.
+- **Lightweight & Standard Library Centric**: Built on top of standard `net/http`.
 - **Static Pre-compilation**: Faster renders by resolving static variables before the server starts.
 - **Smart Layouts**: Automatic inheritance of `head.html` and `body.html` across directories.
 - **Shortcode Plugins**: WordPress-style plugins for reusable UI components.
