@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/html"
@@ -718,8 +719,24 @@ func getPageYml(buf *[]byte, path string) map[string]string {
 	return ymlVars
 }
 
-func Live(root string, vars map[string]string) {
-	//todo: add live compiler with file change listener
-	// and limit to affected subdirs for performance
-	// note: parent pages may still need to update child subpages
+func Live(root string, vars map[string]string, domains []string, devMode bool) {
+	fw := goutil.FileWatcher()
+
+	lastUpdateLog := time.Now().UnixMilli()
+
+	fw.OnAny = func(path, op string) {
+		err := Compile(root, vars, domains, devMode)
+		if err != nil {
+			PrintMsg("error", "Re-compilation failed!")
+			fmt.Println(err)
+			return
+		}
+
+		if time.Now().UnixMilli()-lastUpdateLog > 10000 {
+			PrintMsg("info", "Updated Template Pages")
+		}
+		lastUpdateLog = time.Now().UnixMilli()
+	}
+
+	fw.WatchDir(root + "/pages")
 }

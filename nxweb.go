@@ -35,14 +35,14 @@ type Config struct {
 	PublicURI string // Public path for static files
 
 	// Origins defines the list of allowed 'Host' header values (e.g., "example.com").
-  // If populated, the framework will reject any request whose hostname does 
-  // not match an entry in this list. Leave empty to allow any host.
+	// If populated, the framework will reject any request whose hostname does
+	// not match an entry in this list. Leave empty to allow any host.
 	Origins []string
 
 	// Proxies defines a list of trusted IP addresses allowed to connect to the server.
-  // This validates the physical connection (RemoteAddr). If populated, requests 
-  // from IPs not in this list are rejected. 
-  // NOTE: For local development, include both "127.0.0.1" (IPv4) and "::1" (IPv6).
+	// This validates the physical connection (RemoteAddr). If populated, requests
+	// from IPs not in this list are rejected.
+	// NOTE: For local development, include both "127.0.0.1" (IPv4) and "::1" (IPv6).
 	Proxies []string
 
 	Vars Map // Global variables available to all templates
@@ -118,6 +118,10 @@ func New(root string, config ...Config) (*App, error) {
 	if err != nil {
 		return &App{}, err
 	}
+
+	PrintMsg("info", "Compiled Template Pages", 50, true)
+
+	compiler.Live(root, compVars, config[0].Domains, config[0].DevMode)
 
 	os.MkdirAll(root+"/assets", 0755)
 
