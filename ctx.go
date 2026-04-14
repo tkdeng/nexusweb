@@ -25,10 +25,12 @@ type Ctx struct {
 	rendered bool // Internal flag to prevent double-rendering
 
 	// Public Request Metadata
-	Host   string // The hostname requested (e.g., example.com)
-	Port   string // The port the request arrived on
+	Host     string // The hostname requested (e.g., example.com)
+	RemoteIP string // The physical IP address of the immediate connection (extracted from RemoteAddr)
+	IP       string // The End-User IP (extracted from X-Forwarded-For)
+
 	Path   string // The sanitized request path
-	IP     string // The client's remote IP address
+	Port   string // The port the request arrived on
 	Method string // HTTP method (GET, POST, etc.)
 	Type   string // Content-Type header of the request
 
@@ -56,18 +58,52 @@ func (router *Router) newCtx(w http.ResponseWriter, r *http.Request) (Ctx, error
 		return Ctx{}, fmt.Errorf("unable to detect remote ip address")
 	}
 
-	return Ctx{
+	var userIP string
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		userIP = strings.Split(ip, ",")[0] // Take the first IP in the chain
+	}
+
+	if userIP == "" {
+		userIP = remoteIP
+	}
+
+	ctx := Ctx{
 		router: router,
 		w:      w,
 		r:      r,
 
-		Host:   goutil.Clean(host),
-		Port:   goutil.Clean(port),
+		Host:     goutil.Clean(host),
+		RemoteIP: goutil.Clean(remoteIP),
+		IP:       goutil.Clean(userIP),
+
 		Path:   "/" + strings.Trim(goutil.Clean(r.URL.Path), "/"),
-		IP:     goutil.Clean(remoteIP),
+		Port:   goutil.Clean(port),
 		Method: goutil.Clean(r.Method),
 		Type:   goutil.Clean(r.Header.Get("Content-Type")),
-	}, nil
+	}
+
+	//todo: add methods to ensure host and origin are valid
+	if err := ctx.verifyOrigin(); err != nil {
+		return ctx, err
+	}
+
+	return ctx, nil
+}
+
+func (ctx *Ctx) verifyOrigin() error {
+	// Validate Host against Origins
+	if len(ctx.router.Config.Origins) != 0 && !goutil.Contains(ctx.router.Config.Origins, ctx.Host) {
+		return fmt.Errorf("origin %s not allowed", ctx.Host)
+	}
+
+	// Validate RemoteIP against Proxies
+	if len(ctx.router.Config.Proxies) > 0 {
+		if !goutil.Contains(ctx.router.Config.Proxies, ctx.RemoteIP) {
+			return fmt.Errorf("proxy %s not allowed", ctx.RemoteIP)
+		}
+	}
+
+	return nil
 }
 
 func (ctx *Ctx) Next() error {
@@ -100,7 +136,7 @@ func (ctx *Ctx) Render(path string, vars ...Map) error {
 		"desc":     goutil.Clean(ctx.router.Config.Desc),
 		"icon":     goutil.Clean(ctx.router.Config.Icon),
 		"public":   goutil.Clean(ctx.router.Config.PublicURI),
-		"devmode":    goutil.ToType[string](ctx.router.Config.DevMode),
+		"devmode":  goutil.ToType[string](ctx.router.Config.DevMode),
 	}
 
 	for k, v := range ctx.router.Config.Vars {

@@ -7,13 +7,21 @@ import (
 
 func Test(t *testing.T) {
 	app, err := New("./test", Config{
-		Port:      3000,
+		Port:    3000,
 		DevMode: true,
 		Domains: []string{
 			"localhost",
 		},
 		AssetsURI: "/assets",
 		PublicURI: "/public",
+
+		/* Origins: []string{
+			"localhost",
+		},
+		Proxies: []string{
+			"127.0.0.1",
+			"::1",
+		}, */
 	})
 
 	app.Get("/test", func(c *Ctx) error {
