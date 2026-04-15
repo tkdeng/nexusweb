@@ -722,20 +722,31 @@ func getPageYml(buf *[]byte, path string) map[string]string {
 func Live(root string, vars map[string]string, domains []string, devMode bool) {
 	fw := goutil.FileWatcher()
 
+	lastUpdate := time.Now().UnixMilli()
 	lastUpdateLog := time.Now().UnixMilli()
 
 	fw.OnAny = func(path, op string) {
-		err := Compile(root, vars, domains, devMode)
-		if err != nil {
-			PrintMsg("error", "Re-compilation failed!")
-			fmt.Println(err)
+		if time.Now().UnixMilli()-lastUpdate < 3000 {
 			return
 		}
+		lastUpdate = time.Now().UnixMilli()
 
-		if time.Now().UnixMilli()-lastUpdateLog > 10000 {
-			PrintMsg("info", "Updated Template Pages")
-		}
-		lastUpdateLog = time.Now().UnixMilli()
+		go func() {
+			time.Sleep(2 * time.Second)
+			lastUpdate = time.Now().UnixMilli()
+
+			err := Compile(root, vars, domains, devMode)
+			if err != nil {
+				PrintMsg("error", "Re-compilation failed!")
+				fmt.Println(err)
+				return
+			}
+
+			if time.Now().UnixMilli()-lastUpdateLog > 5000 {
+				PrintMsg("info", "Updated Template Pages")
+			}
+			lastUpdateLog = time.Now().UnixMilli()
+		}()
 	}
 
 	fw.WatchDir(root + "/pages")
