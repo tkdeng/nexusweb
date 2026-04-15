@@ -7,7 +7,7 @@ require (
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/tdewolff/minify/v2 v2.21.3
 	github.com/tkdeng/goutil v0.10.1
-	github.com/tkdeng/regex v1.2.1
+	github.com/tkdeng/regex v1.2.5
 	github.com/tkdeng/simplewebserver v0.3.1
 	github.com/yuin/goldmark v1.7.17
 	gopkg.in/yaml.v3 v3.0.1
