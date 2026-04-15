@@ -8,7 +8,6 @@ Nexus Web is a high-performance Go web framework designed for developers who wan
 
 - **Built on net/http**: Standard library stability with a Fiber-like DX.
 - **Markdown Native**: Full GitHub-Flavored Markdown (GFM) support. Any .md file is automatically processed as a page.
-- **Hybrid Engine**: Pre-compiles static content at startup; injects dynamic data at runtime.
 - **Cascading Templates**: Automatic inheritance—missing files are inherited from the nearest parent directory.
 - **Shortcode Plugins**: WordPress-style logic for reusable UI components.
 
