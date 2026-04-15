@@ -26,7 +26,7 @@ import (
 )
 
 func main(){
-  app, err := nxweb.New("./test", nxweb.Config{
+  app, err := nxweb.New("./app", nxweb.Config{
     Port: 8080,
     Vars: nxweb.Map{
       "myVar": "This is a static constant", // Compiled once at startup
