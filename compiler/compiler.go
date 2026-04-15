@@ -240,18 +240,18 @@ func Compile(root string, vars map[string]string, domains []string, devMode bool
 		}
 
 		os.MkdirAll(root+"/pages", 0755)
-		os.WriteFile(root+"/pages/#layout.html", recodeVars(defBufLayout), 0755)
-		os.WriteFile(root+"/pages/@error.html", recodeVars(defBufError), 0755)
-		os.WriteFile(root+"/pages/head.html", recodeVars(defBufHead), 0755)
-		os.WriteFile(root+"/pages/body.md", recodeVars(defBufBody), 0755)
+		os.WriteFile(root+"/pages/#layout.html", defBufLayout, 0755)
+		os.WriteFile(root+"/pages/@error.html", defBufError, 0755)
+		os.WriteFile(root+"/pages/head.html", defBufHead, 0755)
+		os.WriteFile(root+"/pages/body.md", defBufBody, 0755)
 
 		os.MkdirAll(root+"/pages/about", 0755)
-		os.WriteFile(root+"/pages/about/body.md", recodeVars(defBufAbout), 0755)
+		os.WriteFile(root+"/pages/about/body.md", defBufAbout, 0755)
 		os.MkdirAll(root+"/pages/about/more", 0755)
-		os.WriteFile(root+"/pages/about/more/body.md", recodeVars(defBufMore), 0755)
+		os.WriteFile(root+"/pages/about/more/body.md", defBufMore, 0755)
 
-		os.WriteFile(root+"/pages/header.html", recodeVars(defBufHeader), 0755)
-		os.WriteFile(root+"/pages/@widget.html", recodeVars(defBufWidget), 0755)
+		os.WriteFile(root+"/pages/header.html", defBufHeader, 0755)
+		os.WriteFile(root+"/pages/@widget.html", defBufWidget, 0755)
 	}
 
 	/* os.RemoveAll(root + "/dist")

@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/tkdeng/goutil"
+	"github.com/tkdeng/nexusweb/cron"
 	"github.com/tkdeng/regex"
-	"github.com/tkdeng/simplewebserver/cron"
 )
 
 // autoTLS will automatically generate a self signed tls certificate
