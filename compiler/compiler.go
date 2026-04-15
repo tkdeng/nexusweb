@@ -43,6 +43,12 @@ var defBufHeader []byte
 //go:embed templates/@widget.html
 var defBufWidget []byte
 
+//go:embed templates/script.js
+var defBufScript []byte
+
+//go:embed templates/style.css
+var defBufStyle []byte
+
 func ReadFileHTML(name string, domains []string) ([]byte, map[string]string, error) {
 	var buf []byte
 	var err error
@@ -252,6 +258,16 @@ func Compile(root string, vars map[string]string, domains []string, devMode bool
 
 		os.WriteFile(root+"/pages/header.html", defBufHeader, 0755)
 		os.WriteFile(root+"/pages/@widget.html", defBufWidget, 0755)
+	}
+
+	if stat, err := os.Stat(root + "/assets"); err != nil || !stat.IsDir() {
+		if err == nil && !stat.IsDir() {
+			return fmt.Errorf("pages directory is missing")
+		}
+
+		os.MkdirAll(root+"/assets", 0755)
+		os.WriteFile(root+"/assets/script.js", defBufScript, 0755)
+		os.WriteFile(root+"/assets/style.css", defBufStyle, 0755)
 	}
 
 	/* os.RemoveAll(root + "/dist")
