@@ -235,7 +235,7 @@ func CompressHTML(buf *[]byte, devMode bool) {
 
 func Compile(root string, vars map[string]string, domains []string, devMode bool) error {
 	if stat, err := os.Stat(root + "/pages"); err != nil || !stat.IsDir() {
-		if stat.IsDir() {
+		if !stat.IsDir() {
 			return fmt.Errorf("pages directory is missing")
 		}
 
