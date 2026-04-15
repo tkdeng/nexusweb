@@ -2,8 +2,6 @@
 
 Nexus Web is a high-performance Go web framework designed for developers who want the simplicity of [Fiber](https://github.com/gofiber/fiber) but prefer the stability and compatibility of the built-in `net/http` package.
 
-It features a unique **hybrid template engine** that pre-compiles static variables at startup while allowing flexible dynamic injection at runtime.
-
 ---
 
 ## ✨ Key Features
