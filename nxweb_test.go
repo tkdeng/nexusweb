@@ -48,7 +48,7 @@ func Test(t *testing.T) {
 		return nil
 	})
 
-	api := app.NewRouter("/api")
+	api := app.NewRouter("/api", nil)
 
 	api.Use("/test", func(c *Ctx) error {
 		fmt.Println("called test route")

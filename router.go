@@ -34,7 +34,10 @@ type routeCB struct {
 //
 // It provides prefix-based isolation (e.g., /api) and inherits parent
 // variables, which are automatically injected into the Render engine.
-func (router *Router) NewRouter(path string, vars ...Map) *Router {
+//
+// @handler will run before any other routes are called.
+// This can be useful for initializing data, or adding a firewall to your router.
+func (router *Router) NewRouter(path string, handler func(c *Ctx) error, vars ...Map) *Router {
 	path = mpath.Clean("/" + strings.Trim(path, "/"))
 
 	childRouter := &Router{
@@ -60,6 +63,42 @@ func (router *Router) NewRouter(path string, vars ...Map) *Router {
 				w.Write([]byte("Bad Request!"))
 			}
 			return
+		}
+
+		// run app handler
+		if router.Config.Handler != nil {
+			ctx.next = false
+			if err := router.Config.Handler(&ctx); err != nil {
+				fmt.Println(err)
+
+				// catch 404 error
+				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Internal Server Error!"))
+				}
+				return
+			} else if !ctx.next {
+				ctx.rendered = true
+				return
+			}
+		}
+
+		// run router handler
+		if handler != nil {
+			ctx.next = false
+			if err := handler(&ctx); err != nil {
+				fmt.Println(err)
+
+				// catch 404 error
+				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Internal Server Error!"))
+				}
+				return
+			} else if !ctx.next {
+				ctx.rendered = true
+				return
+			}
 		}
 
 		// handle route callbacks

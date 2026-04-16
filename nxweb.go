@@ -3,6 +3,7 @@ package nxweb
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -62,6 +63,10 @@ type Config struct {
 	// Used by the rendering engine to determine link behavior (e.g., whether
 	// a Markdown link is internal or requires target="_blank").
 	Domains []string
+
+	// Handler will run before any other routes are called.
+	// This can be useful for initializing data, or adding a firewall to your router.
+	Handler func(c *Ctx) error
 }
 
 // Map is a shorthand for map[string]string, used primarily for
@@ -189,6 +194,24 @@ func New(root string, config ...Config) (*App, error) {
 					http.ServeFile(w, r, path)
 					return
 				}
+			}
+		}
+
+		// run app handler
+		if config[0].Handler != nil {
+			ctx.next = false
+			if err := config[0].Handler(&ctx); err != nil {
+				fmt.Println(err)
+
+				// catch 404 error
+				if err = ctx.Error(ctx.Path, 404, "Page Not Found!"); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Internal Server Error!"))
+				}
+				return
+			} else if !ctx.next {
+				ctx.rendered = true
+				return
 			}
 		}
 
