@@ -219,7 +219,11 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 					json.NewDecoder(c.r.Body).Decode(&c.body)
 				}
 			} else if c.form == nil {
-				if err := c.r.ParseForm(); err == nil {
+				if strings.Contains(c.Type, "multipart/form-data") {
+					if err := c.r.ParseMultipartForm(32 << 20); err == nil {
+						c.form = c.r.PostForm
+					}
+				} else if err := c.r.ParseForm(); err == nil {
 					c.form = c.r.PostForm
 				}
 			}

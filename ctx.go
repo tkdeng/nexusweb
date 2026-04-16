@@ -337,7 +337,11 @@ func (ctx *Ctx) Body(key string) (value any, ok bool) {
 	}
 
 	if ctx.form == nil {
-		if err := ctx.r.ParseForm(); err != nil {
+		if strings.Contains(ctx.Type, "multipart/form-data") {
+			if err := ctx.r.ParseMultipartForm(32 << 20); err != nil {
+				return nil, false
+			}
+		} else if err := ctx.r.ParseForm(); err != nil {
 			return nil, false
 		}
 		ctx.form = ctx.r.PostForm
@@ -374,7 +378,11 @@ func (ctx *Ctx) SetBody(key string, value ...string) {
 	}
 
 	if ctx.form == nil {
-		if err := ctx.r.ParseForm(); err != nil {
+		if strings.Contains(ctx.Type, "multipart/form-data") {
+			if err := ctx.r.ParseMultipartForm(32 << 20); err != nil {
+				return
+			}
+		}else if err := ctx.r.ParseForm(); err != nil {
 			return
 		}
 		ctx.form = ctx.r.PostForm
@@ -438,7 +446,7 @@ func (ctx *Ctx) Cookie(name string, value ...string) string {
 }
 
 // GetCookie retrieves the full native http.Cookie object from the request.
-// Use this when you need to inspect cookie metadata beyond just the value, 
+// Use this when you need to inspect cookie metadata beyond just the value,
 // such as Expiry or Domain attributes.
 func (ctx *Ctx) GetCookie(name string) (*http.Cookie, error) {
 	return ctx.r.Cookie(goutil.Clean(name))
@@ -450,7 +458,7 @@ func (ctx *Ctx) SetCookie(cookie *http.Cookie) {
 }
 
 // DelCookie expires a cookie by name, effectively deleting it from the browser.
-// It mirrors the secure defaults of the Cookie() method to ensure the browser 
+// It mirrors the secure defaults of the Cookie() method to ensure the browser
 // correctly identifies and overwrites the intended cookie.
 func (ctx *Ctx) DelCookie(name string) {
 	http.SetCookie(ctx.w, &http.Cookie{
