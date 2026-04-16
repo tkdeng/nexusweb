@@ -85,31 +85,42 @@ func (ctx *Ctx) redirectSSL() error {
 // IsBot performs a strict header sanity check to identify crawlers or automated tools.
 // It checks for bot-like User-Agents and missing headers typical of real browsers.
 func (ctx *Ctx) IsBot() bool {
-	// 1. Explicit User-Agent Bot Check
+	// Explicit User-Agent Bot Check
 	ua := strings.ToLower(ctx.Header("User-Agent"))
 	if len(ua) < 25 || strings.Contains(ua, "bot") || strings.Contains(ua, "crawler") || strings.Contains(ua, "spider") {
 		return true
 	}
 
-	// 2. Accept-Language Check (Browsers almost always send this)
+	// Sec-CH-UA Check
+	if ctx.Header("Sec-CH-UA") == "" && len(ua) < 40 {
+		return true
+	}
+
+	// Accept Header Check
+	accept := ctx.Header("Accept")
+	if ctx.Method == "GET" && !strings.Contains(accept, "text/html") {
+		return true
+	}
+
+	// Accept-Language Check (Browsers almost always send this)
 	lang := ctx.Header("Accept-Language")
 	if lang == "" || (!strings.Contains(lang, ",") && len(lang) < 3) {
 		return true
 	}
 
-	// 3. Cache-Control (Real browsers send this on navigation/refresh)
-	if ctx.Header("Cache-Control") == "" {
+	// Cache-Control (Real browsers send this on navigation/refresh)
+	if ctx.Method != "GET" && ctx.Header("Cache-Control") == "" {
 		return true
 	}
 
-	// 4. Connection Check (Only for HTTP/1.1)
+	// Connection Check (Only for HTTP/1.1)
 	if ctx.r.Proto == "HTTP/1.1" {
 		if !strings.Contains(strings.ToLower(ctx.Header("Connection")), "keep-alive") {
 			return true
 		}
 	}
 
-	// 5. POST Payload Sanity (Checks for empty or suspiciously large form/JSON posts)
+	// POST Payload Sanity (Checks for empty or suspiciously large form/JSON posts)
 	if ctx.Method == "POST" {
 		clStr := ctx.Header("Content-Length")
 		if clStr == "" {
@@ -120,29 +131,57 @@ func (ctx *Ctx) IsBot() bool {
 		if err != nil || cl <= 0 || cl > 1024 {
 			return true
 		}
+
+		// Check for common automated tool Content-Types
+		if ctx.Header("Content-Type") == "" {
+			return true
+		}
 	}
 
 	return false
 }
 
-// BlockBot stops the request with a 403 if IsBot returns true.
-func (ctx *Ctx) BlockBot() bool {
+// BotProtect hardens the page against clickjacking and verifies the client is not a bot.
+// Returns TRUE if the request is safe to proceed.
+// Returns FALSE if the request was blocked and a response was already sent.
+func (ctx *Ctx) BotProtect(useErr418 bool) bool {
+	// Prevent Clickjacking
+	ctx.Header("Content-Security-Policy", "frame-ancestors 'none';")
+	ctx.Header("X-Frame-Options", "DENY")
+	ctx.Header("X-Content-Type-Options", "nosniff")
+	ctx.Header("Strict-Transport-Security", "max-age=63072000")
+	ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+
+	// Perform Client Fingerprinting
 	if ctx.IsBot() {
+		status := http.StatusForbidden // Default 403
 		msg := "Access denied. Suspicious request pattern."
-		http.Error(ctx.w, msg, http.StatusForbidden)
-		return true
+
+		if useErr418 {
+			status = 418
+			msg = "I'm a Teapot"
+		}
+
+		// Attempt to render the custom error template
+		if err := ctx.Error("@error", status, msg); err != nil {
+			// Fallback to a raw response if the template engine fails
+			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
+		}
+
+		return false // Request blocked, caller should stop
 	}
-	return false
+
+	return true // Request is clean, caller should continue
 }
 
 // isSecure is an internal helper used for setting secure defaults (like cookies).
 // It returns true if the environment is configured for SSL or if the request is encrypted.
 func (ctx *Ctx) isSecure() bool {
-  return ctx.router.Config.PortSSL != 0 || ctx.r.TLS != nil || ctx.Header("X-Forwarded-Proto") == "https"
+	return ctx.router.Config.PortSSL != 0 || ctx.r.TLS != nil || ctx.Header("X-Forwarded-Proto") == "https"
 }
 
 // IsSSL returns true if the current request is encrypted.
 // It checks the underlying TLS connection and the X-Forwarded-Proto header.
 func (ctx *Ctx) IsSSL() bool {
-  return ctx.r.TLS != nil || ctx.Header("X-Forwarded-Proto") == "https"
+	return ctx.r.TLS != nil || ctx.Header("X-Forwarded-Proto") == "https"
 }
