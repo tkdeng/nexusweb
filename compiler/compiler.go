@@ -19,6 +19,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+//go:embed templates/#deflayout.html
+var defBufDefLayout []byte
+
 //go:embed templates/#layout.html
 var defBufLayout []byte
 
@@ -39,6 +42,9 @@ var defBufMore []byte
 
 //go:embed templates/header.html
 var defBufHeader []byte
+
+//go:embed templates/nav.html
+var defBufNav []byte
 
 //go:embed templates/@widget.html
 var defBufWidget []byte
@@ -257,6 +263,7 @@ func Compile(root string, vars map[string]string, domains []string, devMode bool
 		os.WriteFile(root+"/pages/about/more/body.md", defBufMore, 0755)
 
 		os.WriteFile(root+"/pages/header.html", defBufHeader, 0755)
+		os.WriteFile(root+"/pages/nav.html", defBufNav, 0755)
 		os.WriteFile(root+"/pages/@widget.html", defBufWidget, 0755)
 	}
 
@@ -275,7 +282,7 @@ func Compile(root string, vars map[string]string, domains []string, devMode bool
 
 	layoutBuf, _, err := ReadFileHTML(root+"/pages/#layout", domains)
 	if err != nil {
-		layoutBuf = defBufLayout
+		layoutBuf = defBufDefLayout
 		encodeVars(&layoutBuf)
 		if err = WriteFileHTML(root+"/pages/#layout", layoutBuf); err != nil {
 			PrintMsg("error", "Error: Failed to write default layout page!")
