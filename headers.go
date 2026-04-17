@@ -32,6 +32,8 @@ func (ctx *Ctx) verifyOrigin() error {
 }
 
 func (ctx *Ctx) verifyHeaders() error {
+	// ctx.Header("Vary", "User-Agent")
+
 	// Set Secure Headers
 	ctx.Header("X-Content-Type-Options", "nosniff")
 	ctx.Header("Strict-Transport-Security", "max-age=63072000")
@@ -142,11 +144,6 @@ func (ctx *Ctx) IsBot() bool {
 		}
 	}
 
-	// Check Sec-Fetch-Dest header
-	if dest := ctx.Header("Sec-Fetch-Dest"); (ctx.Method != "POST" && dest != "document") || (ctx.Method == "POST" && dest != "document" && dest != "empty") {
-		return true
-	}
-
 	return false
 }
 
@@ -154,6 +151,9 @@ func (ctx *Ctx) IsBot() bool {
 // Returns TRUE if the request is safe to proceed.
 // Returns FALSE if the request was blocked and a response was already sent.
 func (ctx *Ctx) BotProtect(useErr418 bool) bool {
+	// ctx.Header("Vary", "User-Agent, Sec-Fetch-Dest, Sec-Fetch-Site")
+	ctx.Header("Vary", "Sec-Fetch-Dest, Sec-Fetch-Site")
+
 	// Prevent Clickjacking
 	ctx.Header("Content-Security-Policy", "frame-ancestors 'none';")
 	ctx.Header("X-Frame-Options", "DENY")
@@ -168,26 +168,39 @@ func (ctx *Ctx) BotProtect(useErr418 bool) bool {
 	// ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 	// ctx.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
 
-	// Perform Client Fingerprinting
-	if ctx.IsBot() {
-		status := http.StatusForbidden // Default 403
-		msg := "Access denied. Suspicious request pattern."
+	status := http.StatusForbidden // Default 403
+	msg := "Access denied. Suspicious request pattern."
 
-		if useErr418 {
-			status = 418
-			msg = "I'm a Teapot"
-		}
-
-		// Attempt to render the custom error template
-		if err := ctx.Error("@error", status, msg); err != nil {
-			// Fallback to a raw response if the template engine fails
-			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
-		}
-
-		return false // Request blocked, caller should stop
+	if useErr418 {
+		status = 418
+		msg = "I'm a Teapot"
 	}
 
-	return true // Request is clean, caller should continue
+	// Perform Client Fingerprinting
+	if ctx.IsBot() {
+		if err := ctx.Error("@error", status, msg); err != nil {
+			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
+		}
+		return false
+	}
+
+	// Check Sec-Fetch-Dest header
+	if dest := ctx.Header("Sec-Fetch-Dest"); (ctx.Method != "POST" && dest != "document") || (ctx.Method == "POST" && dest != "document" && dest != "empty") {
+		if err := ctx.Error("@error", status, msg); err != nil {
+			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
+		}
+		return false
+	}
+
+	// Cheak Sec-Fetch-Site header
+	if site := ctx.Header("Sec-Fetch-Site"); ctx.Method != "GET" && (site != "same-origin" || site != "same-site") {
+		if err := ctx.Error("@error", status, msg); err != nil {
+			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
+		}
+		return false
+	}
+
+	return true
 }
 
 // isSecure is an internal helper used for setting secure defaults (like cookies).
