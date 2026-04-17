@@ -193,7 +193,7 @@ func (ctx *Ctx) BotProtect(useErr418 bool) bool {
 	}
 
 	// Cheak Sec-Fetch-Site header
-	if site := ctx.Header("Sec-Fetch-Site"); ctx.Method != "GET" && (site != "same-origin" || site != "same-site") {
+	if site := ctx.Header("Sec-Fetch-Site"); ctx.Method != "GET" && site != "same-origin" && site != "same-site" {
 		if err := ctx.Error("@error", status, msg); err != nil {
 			ctx.Status(status).Write([]byte("<h1>Error " + strconv.Itoa(status) + "</h1><h2>" + msg + "</h2>"))
 		}
