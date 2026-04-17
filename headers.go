@@ -32,6 +32,12 @@ func (ctx *Ctx) verifyOrigin() error {
 }
 
 func (ctx *Ctx) verifyHeaders() error {
+	// Set Secure Headers
+	ctx.Header("X-Content-Type-Options", "nosniff")
+	ctx.Header("Strict-Transport-Security", "max-age=63072000")
+	ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	ctx.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
+
 	ua := ctx.Header("User-Agent")
 	isBot := strings.Contains(strings.ToLower(ua), "bot") || strings.Contains(strings.ToLower(ua), "spider")
 
@@ -151,9 +157,16 @@ func (ctx *Ctx) BotProtect(useErr418 bool) bool {
 	// Prevent Clickjacking
 	ctx.Header("Content-Security-Policy", "frame-ancestors 'none';")
 	ctx.Header("X-Frame-Options", "DENY")
-	ctx.Header("X-Content-Type-Options", "nosniff")
-	ctx.Header("Strict-Transport-Security", "max-age=63072000")
-	ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	ctx.Header("Cross-Origin-Opener-Policy", "same-origin")
+	ctx.Header("Cross-Origin-Embedder-Policy", "require-corp")
+	ctx.Header("Cross-Origin-Resource-Policy", "same-origin")
+
+	ctx.Header("X-Robots-Tag", "noindex, nofollow")
+
+	// ctx.Header("X-Content-Type-Options", "nosniff")
+	// ctx.Header("Strict-Transport-Security", "max-age=63072000")
+	// ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	// ctx.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
 
 	// Perform Client Fingerprinting
 	if ctx.IsBot() {
