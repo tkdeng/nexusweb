@@ -35,23 +35,26 @@ func (ctx *Ctx) verifyHeaders() error {
 	ua := ctx.Header("User-Agent")
 	isBot := strings.Contains(strings.ToLower(ua), "bot") || strings.Contains(strings.ToLower(ua), "spider")
 
-	// 1. User-Agent: Keep the length check, but maybe lower it to 10.
+	// User-Agent: Keep the length check, but maybe lower it to 10.
 	if len(ua) < 10 {
 		return ctx.errorDeny("Invalid User-Agent")
 	}
 
-	// 2. Accept: Most bots send */* which contains the "/"
-	accept := ctx.Header("Accept")
-	if accept == "" || !strings.Contains(accept, "/") {
+	// Accept: Most bots send */* which contains the "/"
+	if accept := ctx.Header("Accept"); accept == "" || !strings.Contains(accept, "/") {
 		return ctx.errorDeny("Invalid Accept header")
 	}
 
-	// 3. Encoding: Only enforce if it's NOT a bot, or if you're strictly optimizing bandwidth.
-	encoding := ctx.Header("Accept-Encoding")
-	if encoding == "" && !isBot {
+	// Encoding: Only enforce if it's NOT a bot, or if you're strictly optimizing bandwidth.
+	if ctx.Header("Accept-Encoding") == "" && !isBot {
 		// We might want to allow empty encodings for simple crawlers
 		// but your original code was strict:
 		return ctx.errorDeny("Missing Encoding support")
+	}
+
+	// Check Sec-Fetch-Dest header
+	if ctx.Header("Sec-Fetch-Dest") == "" {
+		return ctx.errorDeny("Missing Sec-Fetch-Dest header")
 	}
 
 	return nil
@@ -136,6 +139,11 @@ func (ctx *Ctx) IsBot() bool {
 		if ctx.Header("Content-Type") == "" {
 			return true
 		}
+	}
+
+	// Check Sec-Fetch-Dest header
+	if ctx.Header("Sec-Fetch-Dest") != "document" {
+		return true
 	}
 
 	return false
