@@ -39,7 +39,7 @@ func (ctx *Ctx) verifyHeaders() error {
 	ctx.Header("Strict-Transport-Security", "max-age=63072000")
 	ctx.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 
-	// disable: camera, microphone, geolocation, interest-cohort
+	// disable browser: camera, microphone, geolocation, interest-cohort
 	ctx.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
 
 	ua := ctx.Header("User-Agent")
