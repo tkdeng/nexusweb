@@ -52,11 +52,6 @@ func (ctx *Ctx) verifyHeaders() error {
 		return ctx.errorDeny("Missing Encoding support")
 	}
 
-	// Check Sec-Fetch-Dest header
-	if ctx.Header("Sec-Fetch-Dest") == "" {
-		return ctx.errorDeny("Missing Sec-Fetch-Dest header")
-	}
-
 	return nil
 }
 
