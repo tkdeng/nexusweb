@@ -137,7 +137,7 @@ func (ctx *Ctx) IsBot() bool {
 	}
 
 	// Check Sec-Fetch-Dest header
-	if ctx.Header("Sec-Fetch-Dest") != "document" {
+	if dest := ctx.Header("Sec-Fetch-Dest"); (ctx.Method != "POST" && dest != "document") || (ctx.Method == "POST" && dest != "document" && dest != "empty") {
 		return true
 	}
 
