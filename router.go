@@ -139,12 +139,12 @@ func (router *Router) NewRouter(path string, handler func(c *Ctx) error, vars ..
 	return childRouter
 }
 
-// Use registers a callback for a specific path pattern.
+// use registers a callback for a specific path pattern.
 //
 // Supports static paths, dynamic segments (/:id), and optional parameters (/:id?).
 // It automatically prepares the request body and form data based on the
 // Content-Type header before reaching child handlers.
-func (router *Router) Use(path string, cb func(c *Ctx) error) {
+func (router *Router) use(path string, cb func(c *Ctx) error, exactPath bool) {
 	paths := strings.Split(path, ":")
 	for i, path := range paths {
 		paths[i] = strings.TrimSuffix(path, "/")
@@ -165,98 +165,174 @@ func (router *Router) Use(path string, cb func(c *Ctx) error) {
 	}
 
 	rcb.mu.Lock()
-	*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
-		if len(paths) == 1 && c.Path != paths[0] {
-			return c.Next()
-		}
 
-		if len(paths) != 1 {
-			u := strings.Trim(strings.Replace(c.Path, paths[0], "", 1), "/")
-			if u == "" {
-				optPath := false
-				for i := 1; i < len(paths); i++ {
-					if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
-						optPath = true
-						continue
-					}
-					optPath = false
-					break
-				}
-
-				if !optPath {
-					return c.Next()
-				}
-			}
-
-			uri := strings.Split(u, "/")
-
-			if len(uri) >= len(paths) {
+	if(!exactPath){
+		*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
+			if len(paths) == 1 && !(c.Path == paths[0] || strings.HasPrefix(c.Path, paths[0]+"/")) {
 				return c.Next()
 			}
 
-			pathVars := map[string]string{}
-			for i := 1; i < len(paths); i++ {
-				if i-1 >= len(uri) {
-					if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+			if len(paths) != 1 {
+				u := strings.Trim(strings.Replace(c.Path, paths[0], "", 1), "/")
+				if u == "" {
+					optPath := false
+					for i := 1; i < len(paths); i++ {
+						if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+							optPath = true
+							continue
+						}
+						optPath = false
 						break
 					}
-					return c.Next()
+
+					if !optPath {
+						return c.Next()
+					}
 				}
-				pathVars[strings.Trim(paths[i], "?")] = uri[i-1]
+
+				uri := strings.Split(u, "/")
+
+				pathVars := map[string]string{}
+				for i := 1; i < len(paths); i++ {
+					if i-1 >= len(uri) {
+						if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+							break
+						}
+						return c.Next()
+					}
+					pathVars[strings.Trim(paths[i], "?")] = uri[i-1]
+				}
+
+				c.Params = pathVars
+			} else {
+				c.Params = map[string]string{}
 			}
 
-			c.Params = pathVars
-		} else {
-			c.Params = map[string]string{}
-		}
-
-		if c.Method == "GET" {
-			c.query = c.r.URL.Query()
-		} else if c.Method == "POST" {
-			if strings.Contains(c.Type, "application/json") {
-				if c.body == nil {
-					c.body = make(map[string]any)
-					json.NewDecoder(c.r.Body).Decode(&c.body)
-				}
-			} else if c.form == nil {
-				if strings.Contains(c.Type, "multipart/form-data") {
-					if err := c.r.ParseMultipartForm(32 << 20); err == nil {
+			if c.Method == "GET" {
+				c.query = c.r.URL.Query()
+			} else if c.Method == "POST" {
+				if strings.Contains(c.Type, "application/json") {
+					if c.body == nil {
+						c.body = make(map[string]any)
+						json.NewDecoder(c.r.Body).Decode(&c.body)
+					}
+				} else if c.form == nil {
+					if strings.Contains(c.Type, "multipart/form-data") {
+						if err := c.r.ParseMultipartForm(32 << 20); err == nil {
+							c.form = c.r.PostForm
+						}
+					} else if err := c.r.ParseForm(); err == nil {
 						c.form = c.r.PostForm
 					}
-				} else if err := c.r.ParseForm(); err == nil {
-					c.form = c.r.PostForm
 				}
 			}
-		}
 
-		return cb(c)
-	})
+			return cb(c)
+		})
+	}else{
+		*rcb.cb = append(*rcb.cb, func(c *Ctx) error {
+			if len(paths) == 1 && c.Path != paths[0] {
+				return c.Next()
+			}
+	
+			if len(paths) != 1 {
+				u := strings.Trim(strings.Replace(c.Path, paths[0], "", 1), "/")
+				if u == "" {
+					optPath := false
+					for i := 1; i < len(paths); i++ {
+						if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+							optPath = true
+							continue
+						}
+						optPath = false
+						break
+					}
+	
+					if !optPath {
+						return c.Next()
+					}
+				}
+	
+				uri := strings.Split(u, "/")
+	
+				if len(uri) >= len(paths) {
+					return c.Next()
+				}
+	
+				pathVars := map[string]string{}
+				for i := 1; i < len(paths); i++ {
+					if i-1 >= len(uri) {
+						if strings.HasPrefix(paths[i], "?") || strings.HasSuffix(paths[i], "?") {
+							break
+						}
+						return c.Next()
+					}
+					pathVars[strings.Trim(paths[i], "?")] = uri[i-1]
+				}
+	
+				c.Params = pathVars
+			} else {
+				c.Params = map[string]string{}
+			}
+	
+			if c.Method == "GET" {
+				c.query = c.r.URL.Query()
+			} else if c.Method == "POST" {
+				if strings.Contains(c.Type, "application/json") {
+					if c.body == nil {
+						c.body = make(map[string]any)
+						json.NewDecoder(c.r.Body).Decode(&c.body)
+					}
+				} else if c.form == nil {
+					if strings.Contains(c.Type, "multipart/form-data") {
+						if err := c.r.ParseMultipartForm(32 << 20); err == nil {
+							c.form = c.r.PostForm
+						}
+					} else if err := c.r.ParseForm(); err == nil {
+						c.form = c.r.PostForm
+					}
+				}
+			}
+	
+			return cb(c)
+		})
+	}
+
 	rcb.mu.Unlock()
 }
 
-// Query returns the value of a query parameter and a boolean indicating its existence.
+// Use registers a callback for a specific path pattern.
 //
-// It lazily initializes the query map from the request URL.
+// Supports static paths, dynamic segments (/:id), and optional parameters (/:id?).
+// It automatically prepares the request body and form data based on the
+// Content-Type header before reaching child handlers.
+func (router *Router) Use(path string, cb func(c *Ctx) error) {
+	router.use(path, cb, false)
+}
+
+// Get registers a handler for HTTP GET requests on the specified path.
+// It leverages the underlying 'use' method to handle path matching 
+// and dynamic parameter extraction (e.g., /:id or /:id?).
 func (router *Router) Get(path string, cb func(c *Ctx) error) {
-	router.Use(path, func(c *Ctx) error {
+	router.use(path, func(c *Ctx) error {
 		if c.Method == "GET" {
 			return cb(c)
 		}
 		return c.Next()
-	})
+	}, true)
 }
 
-// SetQuery modifies or deletes a query parameter in the current context.
-//
-// If a value is provided, it updates the parameter; if no value is provided,
-// the key is deleted from the query map.
+// Post registers a handler for HTTP POST requests on the specified path.
+// It leverages the underlying 'use' method, which provides automatic 
+// body parsing for 'application/json', 'multipart/form-data', and 
+// 'application/x-www-form-urlencoded' before the callback is executed.
 func (router *Router) Post(path string, cb func(c *Ctx) error) {
-	router.Use(path, func(c *Ctx) error {
+	router.use(path, func(c *Ctx) error {
 		if c.Method == "POST" {
 			return cb(c)
 		}
 		return c.Next()
-	})
+	}, true)
 }
 
 func (rcb *routeCB) run(ctx *Ctx) {

@@ -2,6 +2,7 @@ package nxweb
 
 import (
 	"fmt"
+	"log"
 	"testing"
 )
 
@@ -59,6 +60,5 @@ func Test(t *testing.T) {
 		t.Error(err)
 	}
 
-	app.Listen()
-	_ = app
+	log.Fatal(app.Listen())
 }

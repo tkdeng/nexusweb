@@ -278,7 +278,9 @@ func (ctx *Ctx) Status(status int) *Ctx {
 	return ctx
 }
 
-// Query returns the value of a query parameter and a boolean indicating if it exists
+// Query returns the value of a query parameter and a boolean indicating its existence.
+//
+// It lazily initializes the query map from the request URL.
 func (ctx *Ctx) Query(key string) (value string, ok bool) {
 	if ctx.query == nil {
 		ctx.query = ctx.r.URL.Query()
@@ -296,9 +298,10 @@ func (ctx *Ctx) Query(key string) (value string, ok bool) {
 	return goutil.Clean(val[0]), true
 }
 
-// SetQuery sets a query parameter
+// SetQuery modifies or deletes a query parameter in the current context.
 //
-// If no value is provided, the key is deleted
+// If a value is provided, it updates the parameter; if no value is provided,
+// the key is deleted from the query map.
 func (ctx *Ctx) SetQuery(key string, value ...string) {
 	if ctx.query == nil {
 		ctx.query = ctx.r.URL.Query()

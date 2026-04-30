@@ -26,6 +26,7 @@ import (
 )
 
 func main(){
+  // Initialize the app with the template directory and configuration
   app, err := nxweb.New("./app", nxweb.Config{
     Port: 8080,
     Vars: nxweb.Map{
@@ -33,13 +34,40 @@ func main(){
     },
   })
 
-  app.Use("/path", func(c *nxweb.Ctx) error {
+  // GET Route: Rendering a template with dynamic variables
+  app.Get("/path", func(c *nxweb.Ctx) error {
     return c.Render("index", nxweb.Map{
       "dynamicVar": "This is injected at runtime!",
     })
   })
 
-  app.Listen()
+  // POST Route: Demonstrates dynamic parameters and automatic sanitization
+  app.Post("/api/user/:id", func(c *nxweb.Ctx) error {
+    // c.Params contains URI segments extracted by the router
+    userID := c.Params["id"]
+
+    // c.Body(key) returns (any, bool) for JSON or Form data
+    val, ok := c.Body("name")
+    if !ok {
+      return c.Json(nxweb.JSON{"error": "Name is required"})
+    }
+
+    // ToType[T] converts the value to the requested type AND 
+    // automatically ensures valid UTF-8 for string, []byte, and byte.
+    userName := nxweb.ToType[string](val)
+
+    return c.Json(nxweb.JSON{
+      "status":  "success",
+      "message": "Profile updated",
+      "data": nxweb.JSON{
+        "id":   userID,
+        "name": userName,
+      },
+    })
+  })
+
+  // Start the server
+  log.Fatal(app.Listen())
 }
 
 ```

@@ -73,6 +73,10 @@ type Config struct {
 // passing template variables or configuration sets.
 type Map map[string]string
 
+// JSON is a shorthand for map[string]any, used for flexible 
+// data structures like JSON responses or complex body parsing.
+type JSON map[string]any
+
 // New creates a new webserver
 func New(root string, config ...Config) (*App, error) {
 	var err error

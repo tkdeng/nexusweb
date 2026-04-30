@@ -278,7 +278,31 @@ func PrintMsg(color string, msg string, size int, end bool) {
 
 // ToType attempts to converts an interface{} from the many possible types in golang, to a specific type of your choice
 //
-// if it fails to convert, it will return a nil/zero value for the appropriate type
+// If the target type is a string, []byte, or byte, it automatically calls 
+// Clean to sanitize the value to valid UTF-8. If conversion fails, it 
+// returns the nil/zero value for the requested type.
 func ToType[T goutil.SupportedType](val any) T {
+	v := goutil.ToType[T](val)
+
+	var varT interface{} = ""
+	if _, ok := varT.(T); ok {
+		v = goutil.ToInterface{goutil.Clean(goutil.ToInterface{v}.Val.(string))}.Val.(T)
+	}
+
+	varT = []byte{}
+	if _, ok := varT.(T); ok {
+		v = goutil.ToInterface{goutil.Clean(goutil.ToInterface{v}.Val.([]byte))}.Val.(T)
+	}
+
+	varT = byte(0)
+	if _, ok := varT.(T); ok {
+		v = goutil.ToInterface{goutil.Clean([]byte{goutil.ToInterface{v}.Val.(byte)})[0]}.Val.(T)
+	}
+
 	return goutil.ToType[T](val)
+}
+
+// Clean will sanitizes a string to valid UTF-8
+func Clean[T interface{ string | []byte }](val T) T {
+	return goutil.Clean(val)
 }
